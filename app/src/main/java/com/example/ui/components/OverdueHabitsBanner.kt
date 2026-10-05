@@ -30,7 +30,7 @@ fun OverdueHabitsBanner(
     onOpenFocusMode: (Habit) -> Unit,
     onOpenCheckIn: (Habit) -> Unit,
     onSnooze: () -> Unit,
-    onTriggerSound: () -> Unit,
+    onTriggerSound: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     if (overdueHabits.isEmpty()) return
@@ -75,18 +75,16 @@ fun OverdueHabitsBanner(
                         color = StatusPartial
                     )
                 }
-                FilledTonalButton(
-                    onClick = onTriggerSound,
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                    shape = RoundedCornerShape(10.dp),
-                    colors = ButtonDefaults.filledTonalButtonColors(
-                        containerColor = StatusPartial.copy(alpha = 0.2f),
-                        contentColor = StatusPartial
-                    )
+                Badge(
+                    containerColor = StatusPartial.copy(alpha = 0.2f),
+                    contentColor = StatusPartial
                 ) {
-                    Icon(Icons.Default.Alarm, contentDescription = null, modifier = Modifier.size(14.dp))
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Alarme", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        text = "${overdueHabits.size} pendente${if (overdueHabits.size > 1) "s" else ""}",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
                 }
             }
 

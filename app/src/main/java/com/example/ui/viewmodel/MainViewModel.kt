@@ -189,6 +189,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun setAllHabitsShowInWidget(show: Boolean = true) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val habits = habitoRepository.allHabits.firstOrNull() ?: emptyList()
+            habits.forEach { habit ->
+                if (habit.showInWidget != show) {
+                    habitoRepository.updateHabit(habit.copy(showInWidget = show, updatedAt = System.currentTimeMillis()))
+                }
+            }
+            com.example.widget.RotinaUpWidgetProvider.updateAllWidgets(getApplication())
+            showToast("Todos os hábitos foram ativados no widget!")
+        }
+    }
+
     fun saveSleepLog(
         bedtimeStr: String,
         wakeTimeStr: String,

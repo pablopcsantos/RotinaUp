@@ -94,8 +94,11 @@ fun RotinaUpApp(
 
     val activeHabitsList by viewModel.activeHabits.collectAsState()
     val todayLogsList by viewModel.todayLogs.collectAsState()
+    val todaySleepLog by viewModel.todaySleepLog.collectAsState()
+    val todayDailyReview by viewModel.todayDailyReview.collectAsState()
     val currentTimeStr by viewModel.currentTimeStr.collectAsState()
     val snoozeUntil by viewModel.snoozeUntil.collectAsState()
+    val mandatorySnoozeUntil by viewModel.mandatorySnoozeUntil.collectAsState()
 
     // Settle delay to ensure Room database flows have emitted their initial disk state
     // before any modal dialog or alarm evaluation occurs (eliminates startup dialog flash)
@@ -130,6 +133,25 @@ fun RotinaUpApp(
                 val isDoneOrSkipped = log?.status == "DONE" || log?.status == "SKIPPED"
                 isToday && !isDoneOrSkipped && h.targetTime <= currentTimeStr
             }
+        }
+    }
+
+    // Overdue Mandatory Steps Alarm triggering logic
+    val isMandatoryOverdueForAlarm = remember(
+        isDataSettled,
+        isFromWidget,
+        todaySleepLog,
+        todayDailyReview,
+        currentTimeStr,
+        settings.mandatoryRemindersEnabled,
+        settings.mandatoryDeadlineTime,
+        mandatorySnoozeUntil
+    ) {
+        if (!isDataSettled || isFromWidget || !settings.mandatoryRemindersEnabled || System.currentTimeMillis() < mandatorySnoozeUntil) {
+            false
+        } else {
+            val pending = (todaySleepLog == null) || (todayDailyReview == null)
+            pending && currentTimeStr >= settings.mandatoryDeadlineTime
         }
     }
 
@@ -208,6 +230,29 @@ fun RotinaUpApp(
             },
             onAdiar = {
                 viewModel.snoozeOverdue(settings.overdueIntervalMinutes)
+            }
+        )
+    }
+
+    // 4.1 Overdue Mandatory Steps Alarm & Dialog
+    if (activeFocusHabit == null && activeAlarmHabit == null && overdueHabitForAlarm == null && isMandatoryOverdueForAlarm) {
+        MandatoryOverdueDialog(
+            deadlineTime = settings.mandatoryDeadlineTime,
+            intervalMinutes = settings.mandatoryIntervalMinutes,
+            soundEnabled = settings.mandatoryAlarmSound,
+            isSleepMissing = todaySleepLog == null,
+            isDailyReviewMissing = todayDailyReview == null,
+            audioPlayer = viewModel.audioPlayer,
+            onNavigateToSleep = {
+                viewModel.snoozeMandatoryOverdue(settings.mandatoryIntervalMinutes)
+                navController.navigate("sleep")
+            },
+            onNavigateToDailyReview = {
+                viewModel.snoozeMandatoryOverdue(settings.mandatoryIntervalMinutes)
+                navController.navigate("daily")
+            },
+            onSnooze = {
+                viewModel.snoozeMandatoryOverdue(settings.mandatoryIntervalMinutes)
             }
         )
     }

@@ -127,9 +127,9 @@ fun WidgetPreviewModal(
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = if (hiddenCount > 0) {
-                                "Exibindo ${activeHabits.size} hábito(s) configurado(s) ($hiddenCount oculto(s) do widget)."
+                                "Exibindo todos os ${activeHabits.size} hábito(s) configurado(s) para o widget ($hiddenCount oculto(s))."
                             } else {
-                                "O widget na tela inicial exibe os hábitos com histórico visual dos últimos 7 dias atualizado em tempo real."
+                                "Exibindo todos os ${activeHabits.size} hábitos programados para o widget com histórico atualizado em tempo real."
                             },
                             fontSize = 11.sp,
                             lineHeight = 16.sp,
@@ -213,87 +213,99 @@ fun WidgetPreviewModal(
 
                         Spacer(modifier = Modifier.height(4.dp))
 
-                        // Habit items with 7-day adherence dots
-                        activeHabits.take(4).forEach { habit ->
-                            val todayLog = todayLogsMap[habit.id]
-                            val isTodayDone = todayLog?.status == "DONE"
-                            val isTodayPartial = todayLog?.status == "PARTIAL"
-
-                            Surface(
-                                shape = RoundedCornerShape(12.dp),
-                                color = Color(0xFF1E293B),
+                        // Habit items with 7-day adherence dots (ALL habits scheduled for the widget)
+                        if (activeHabits.isEmpty()) {
+                            Text(
+                                text = "Nenhum hábito programado para o widget.\nAtive a opção 'No widget' ao criar ou editar seus hábitos.",
+                                color = Color(0xFF94A3B8),
+                                fontSize = 11.sp,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(vertical = 3.dp)
-                            ) {
-                                Row(
+                                    .padding(vertical = 16.dp)
+                            )
+                        } else {
+                            activeHabits.forEach { habit ->
+                                val todayLog = todayLogsMap[habit.id]
+                                val isTodayDone = todayLog?.status == "DONE"
+                                val isTodayPartial = todayLog?.status == "PARTIAL"
+
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = Color(0xFF1E293B),
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(horizontal = 10.dp, vertical = 7.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
+                                        .padding(vertical = 3.dp)
                                 ) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = habit.name,
-                                            color = Color.White,
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 11.sp,
-                                            maxLines = 1
-                                        )
-                                        Text(
-                                            text = habit.targetTime,
-                                            color = Color(0xFF94A3B8),
-                                            fontSize = 9.sp
-                                        )
-                                    }
-
-                                    // 7-day adherence dots
                                     Row(
-                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 10.dp, vertical = 7.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        last7Days.forEach { (dStr, _, isToday) ->
-                                            val pastLog = allLogs.find { it.habitId == habit.id && it.date == dStr }
-                                            val dotDone = pastLog?.status == "DONE"
-                                            val dotPartial = pastLog?.status == "PARTIAL"
-                                            val dotSkipped = pastLog?.status == "SKIPPED"
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = habit.name,
+                                                color = Color.White,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 11.sp,
+                                                maxLines = 1
+                                            )
+                                            Text(
+                                                text = habit.targetTime,
+                                                color = Color(0xFF94A3B8),
+                                                fontSize = 9.sp
+                                            )
+                                        }
 
-                                            val isoDay = DateUtils.getIsoDayOfWeek(dStr)
-                                            val isScheduled = habit.daysOfWeek.split(",")
-                                                .mapNotNull { it.trim().toIntOrNull() }
-                                                .contains(isoDay)
+                                        // 7-day adherence dots
+                                        Row(
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            last7Days.forEach { (dStr, _, isToday) ->
+                                                val pastLog = allLogs.find { it.habitId == habit.id && it.date == dStr }
+                                                val dotDone = pastLog?.status == "DONE"
+                                                val dotPartial = pastLog?.status == "PARTIAL"
+                                                val dotSkipped = pastLog?.status == "SKIPPED"
 
-                                            val dotColor = when {
-                                                dotDone -> Color(0xFF22C55E)
-                                                dotPartial -> Color(0xFFF59E0B)
-                                                dotSkipped -> Color(0xFFEF4444)
-                                                !isScheduled -> Color.Transparent
-                                                !isToday -> Color(0xFFEF4444).copy(alpha = 0.6f)
-                                                else -> Color(0xFF475569)
-                                            }
+                                                val isoDay = DateUtils.getIsoDayOfWeek(dStr)
+                                                val isScheduled = habit.daysOfWeek.split(",")
+                                                    .mapNotNull { it.trim().toIntOrNull() }
+                                                    .contains(isoDay)
 
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(14.dp)
-                                                    .clip(CircleShape)
-                                                    .background(dotColor)
-                                                    .border(
-                                                        1.dp,
-                                                        if (dotDone) Color(0xFF22C55E)
-                                                        else if (isScheduled) Color(0xFF64748B)
-                                                        else Color(0xFF334155),
-                                                        CircleShape
-                                                    ),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                if (dotDone) {
-                                                    Icon(
-                                                        Icons.Default.Check,
-                                                        contentDescription = null,
-                                                        tint = Color.White,
-                                                        modifier = Modifier.size(8.dp)
-                                                    )
+                                                val dotColor = when {
+                                                    dotDone -> Color(0xFF22C55E)
+                                                    dotPartial -> Color(0xFFF59E0B)
+                                                    dotSkipped -> Color(0xFFEF4444)
+                                                    !isScheduled -> Color.Transparent
+                                                    !isToday -> Color(0xFFEF4444).copy(alpha = 0.6f)
+                                                    else -> Color(0xFF475569)
+                                                }
+
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(14.dp)
+                                                        .clip(CircleShape)
+                                                        .background(dotColor)
+                                                        .border(
+                                                            1.dp,
+                                                            if (dotDone) Color(0xFF22C55E)
+                                                            else if (isScheduled) Color(0xFF64748B)
+                                                            else Color(0xFF334155),
+                                                            CircleShape
+                                                        ),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    if (dotDone) {
+                                                        Icon(
+                                                            Icons.Default.Check,
+                                                            contentDescription = null,
+                                                            tint = Color.White,
+                                                            modifier = Modifier.size(8.dp)
+                                                        )
+                                                    }
                                                 }
                                             }
                                         }

@@ -216,6 +216,21 @@ fun SettingsScreen(
                                 Text("Visualizador", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             }
                         }
+
+                        val activeCount = habits.count { it.isActive }
+                        val inWidgetCount = habits.count { it.isActive && it.showInWidget }
+                        Spacer(modifier = Modifier.height(10.dp))
+                        OutlinedButton(
+                            onClick = {
+                                viewModel.setAllHabitsShowInWidget(true)
+                            },
+                            shape = RoundedCornerShape(14.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Default.Widgets, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Exibir Todos os Hábitos no Widget ($inWidgetCount/$activeCount)", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
             }

@@ -73,7 +73,7 @@ class RotinaUpWidgetProvider : AppWidgetProvider() {
                 try {
                     val db = AppDatabase.getDatabase(context)
                     val allActiveHabits = db.habitDao().getAllActiveHabits().firstOrNull() ?: emptyList()
-                    val habits = allActiveHabits.filter { it.showInWidget }
+                    val habits = allActiveHabits.filter { it.showInWidget }.sortedBy { it.targetTime }
                     val allLogs = db.habitDao().getAllLogs().firstOrNull() ?: emptyList()
 
                     views.removeAllViews(R.id.widget_habits_container)

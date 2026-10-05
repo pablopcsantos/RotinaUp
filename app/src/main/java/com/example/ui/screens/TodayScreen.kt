@@ -191,11 +191,7 @@ fun TodayScreen(
                         soundEnabled = settings.overdueAlarmSound,
                         onOpenFocusMode = onStartFocusMode,
                         onOpenCheckIn = onOpenDetailedCheckIn,
-                        onSnooze = { viewModel.snoozeOverdue(settings.overdueIntervalMinutes) },
-                        onTriggerSound = {
-                            viewModel.audioPlayer.playOverdueChime()
-                            viewModel.showToast("Som de lembrete testado!")
-                        }
+                        onSnooze = { viewModel.snoozeOverdue(settings.overdueIntervalMinutes) }
                     )
                 }
             }
