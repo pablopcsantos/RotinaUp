@@ -1,0 +1,95 @@
+package com.example.ui.viewmodel
+
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import com.example.data.db.AppDatabase
+import com.example.data.model.HabitLog
+import com.example.data.model.Habito
+import com.example.data.repository.HabitoRepository
+import com.example.util.DateUtils
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
+
+class HabitoViewModel(
+    application: Application
+) : AndroidViewModel(application) {
+    private val repository: HabitoRepository = HabitoRepository(AppDatabase.getDatabase(application).habitDao())
+
+    val todayDateStr: String = DateUtils.getTodayDateString(0)
+
+    val allHabits: StateFlow<List<Habito>> = repository.allHabits
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+    val activeHabits: StateFlow<List<Habito>> = repository.activeHabits
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+    val todayLogs: StateFlow<List<HabitLog>> = repository.getLogsForDate(todayDateStr)
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+    val allLogs: StateFlow<List<HabitLog>> = repository.allLogs
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+    fun saveHabit(habit: Habito, onSaved: (() -> Unit)? = null) {
+        viewModelScope.launch {
+            if (habit.id == 0L) {
+                repository.insertHabit(habit)
+            } else {
+                repository.updateHabit(habit.copy(updatedAt = System.currentTimeMillis()))
+            }
+            onSaved?.invoke()
+        }
+    }
+
+    fun deleteHabit(habit: Habito, onDeleted: (() -> Unit)? = null) {
+        viewModelScope.launch {
+            repository.deleteHabit(habit)
+            onDeleted?.invoke()
+        }
+    }
+
+    fun toggleHabitActive(habit: Habito) {
+        viewModelScope.launch {
+            val updated = habit.copy(isActive = !habit.isActive, updatedAt = System.currentTimeMillis())
+            repository.updateHabit(updated)
+        }
+    }
+
+    fun checkIn(
+        habitId: Long,
+        date: String = todayDateStr,
+        status: String, // DONE, PARTIAL, SKIPPED
+        reason: String? = null,
+        note: String? = null
+    ) {
+        viewModelScope.launch {
+            repository.insertOrUpdateLog(
+                HabitLog(
+                    habitId = habitId,
+                    date = date,
+                    status = status,
+                    reason = reason,
+                    note = note
+                )
+            )
+        }
+    }
+}

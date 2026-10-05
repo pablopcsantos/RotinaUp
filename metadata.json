@@ -1,0 +1,6 @@
+{
+  "name": "RotinaUp",
+  "description": "Assistente pessoal de rotina saudável, sono, combate à procrastinação e construção de hábitos 100% offline.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

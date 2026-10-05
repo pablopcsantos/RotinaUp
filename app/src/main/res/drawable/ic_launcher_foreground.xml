@@ -1,0 +1,33 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:translateX="0"
+        android:translateY="0">
+        <!-- Concentric Adherence Rings -->
+        <path
+            android:pathData="M 87,67.4 A 19.6,19.6 0 0,0 67.4,87"
+            android:strokeColor="#FFFFFF"
+            android:strokeWidth="5"
+            android:strokeLineCap="round"
+            android:fillColor="#00000000" />
+        <path
+            android:pathData="M 87,71.9 A 15.1,15.1 0 0,0 71.9,87"
+            android:strokeColor="#48B452"
+            android:strokeWidth="4.5"
+            android:strokeLineCap="round"
+            android:fillColor="#00000000" />
+        <path
+            android:pathData="M 87,77.1 A 9.9,9.9 0 0,0 77.1,87"
+            android:strokeColor="#1E5E97"
+            android:strokeWidth="2.2"
+            android:strokeLineCap="round"
+            android:fillColor="#00000000" />
+        <!-- Main Deep Blue Checkmark -->
+        <path
+            android:fillColor="#1E5E97"
+            android:pathData="M37.1,57.7 L47.4,68.0 C48.4,69.1 50.1,69.1 51.1,68.0 L71.9,44.8 C73.2,43.4 73.2,41.3 71.6,40.0 C70.1,38.7 68.0,39.0 66.7,40.3 L49.2,60.3 L41.6,52.5 C40.2,51.1 38.1,51.2 36.8,52.7 C35.5,54.1 35.6,56.3 37.1,57.7 Z" />
+    </group>
+</vector>
