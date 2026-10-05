@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/habit_row"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:layout_marginTop="4dp"
+    android:background="@drawable/bg_widget_card"
+    android:padding="6dp">
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical">
+        <TextView
+            android:id="@+id/habit_item_name"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Hábito"
+            android:textColor="#F8FAFC"
+            android:textSize="11sp"
+            android:textStyle="bold"
+            android:maxLines="1" />
+        <TextView
+            android:id="@+id/habit_item_time"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="08:00"
+            android:textColor="#94A3B8"
+            android:textSize="9sp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+        <ImageView android:id="@+id/dot_1" android:layout_width="12dp" android:layout_height="12dp" android:layout_marginHorizontal="2dp" android:src="@drawable/widget_dot_empty" />
+        <ImageView android:id="@+id/dot_2" android:layout_width="12dp" android:layout_height="12dp" android:layout_marginHorizontal="2dp" android:src="@drawable/widget_dot_empty" />
+        <ImageView android:id="@+id/dot_3" android:layout_width="12dp" android:layout_height="12dp" android:layout_marginHorizontal="2dp" android:src="@drawable/widget_dot_empty" />
+        <ImageView android:id="@+id/dot_4" android:layout_width="12dp" android:layout_height="12dp" android:layout_marginHorizontal="2dp" android:src="@drawable/widget_dot_empty" />
+        <ImageView android:id="@+id/dot_5" android:layout_width="12dp" android:layout_height="12dp" android:layout_marginHorizontal="2dp" android:src="@drawable/widget_dot_empty" />
+        <ImageView android:id="@+id/dot_6" android:layout_width="12dp" android:layout_height="12dp" android:layout_marginHorizontal="2dp" android:src="@drawable/widget_dot_empty" />
+        <ImageView android:id="@+id/dot_7" android:layout_width="12dp" android:layout_height="12dp" android:layout_marginHorizontal="2dp" android:src="@drawable/widget_dot_empty" />
+    </LinearLayout>
+</LinearLayout>

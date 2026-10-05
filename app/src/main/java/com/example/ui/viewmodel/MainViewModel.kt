@@ -70,6 +70,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _snoozeUntil = MutableStateFlow(0L)
     val snoozeUntil: StateFlow<Long> = _snoozeUntil.asStateFlow()
 
+    // Snooze until timestamp for mandatory steps reminder
+    private val _mandatorySnoozeUntil = MutableStateFlow(0L)
+    val mandatorySnoozeUntil: StateFlow<Long> = _mandatorySnoozeUntil.asStateFlow()
+
     // Toast feedback message
     private val _toastMessage = MutableStateFlow<String?>(null)
     val toastMessage: StateFlow<String?> = _toastMessage.asStateFlow()
@@ -106,6 +110,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun snoozeOverdue(minutes: Int) {
         _snoozeUntil.value = System.currentTimeMillis() + minutes * 60 * 1000L
         showToast("Lembrete adiado por ${if (minutes >= 60) "${minutes / 60}h" else "$minutes min"}")
+    }
+
+    fun snoozeMandatoryOverdue(minutes: Int) {
+        _mandatorySnoozeUntil.value = System.currentTimeMillis() + minutes * 60 * 1000L
+        showToast("Lembrete de etapas adiado por ${if (minutes >= 60) "${minutes / 60}h" else "$minutes min"}")
     }
 
     fun dismissDummyPrompt() {

@@ -48,6 +48,7 @@ fun TodayScreen(
     val settings by viewModel.userSettings.collectAsState()
     val currentTimeStr by viewModel.currentTimeStr.collectAsState()
     val snoozeUntil by viewModel.snoozeUntil.collectAsState()
+    val mandatorySnoozeUntil by viewModel.mandatorySnoozeUntil.collectAsState()
 
     val isDark = when (settings.themeMode) {
         "dark" -> true
@@ -82,6 +83,23 @@ fun TodayScreen(
                 val isDoneOrSkipped = log?.status == "DONE" || log?.status == "SKIPPED"
                 !isDoneOrSkipped && h.targetTime <= currentTimeStr
             }
+        }
+    }
+
+    // Overdue mandatory steps (Night Sleep + Daily Review)
+    val isMandatorySnoozed = System.currentTimeMillis() < mandatorySnoozeUntil
+    val isMandatoryOverdue = remember(
+        todaySleepLog,
+        todayDailyReview,
+        currentTimeStr,
+        settings.mandatoryRemindersEnabled,
+        settings.mandatoryDeadlineTime,
+        isMandatorySnoozed
+    ) {
+        if (!settings.mandatoryRemindersEnabled || isMandatorySnoozed) false
+        else {
+            val pending = (todaySleepLog == null) || (todayDailyReview == null)
+            pending && currentTimeStr >= settings.mandatoryDeadlineTime
         }
     }
 
@@ -189,10 +207,10 @@ fun TodayScreen(
                     dailyReviewLogged = todayDailyReview != null,
                     onNavigateToSleep = onNavigateToSleep,
                     onNavigateToDailyReview = onNavigateToDailyReview,
-                    onTriggerChime = {
-                        viewModel.audioPlayer.playOverdueChime()
-                        viewModel.showToast("Alarme de lembrete reproduzido!")
-                    }
+                    isOverdue = isMandatoryOverdue,
+                    deadlineTime = settings.mandatoryDeadlineTime,
+                    intervalMinutes = settings.mandatoryIntervalMinutes,
+                    onSnooze = { viewModel.snoozeMandatoryOverdue(settings.mandatoryIntervalMinutes) }
                 )
             }
 
@@ -445,12 +463,12 @@ fun TodayScreen(
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Icon(
-                                        imageVector = when (habit.type) {
+                                        imageVector = when (habit.type.uppercase()) {
                                             "SLEEP" -> Icons.Default.Nightlight
                                             "EXERCISE" -> Icons.Default.FitnessCenter
                                             "WATER" -> Icons.Default.WaterDrop
-                                            "CUSTOM" -> Icons.Default.Star
-                                            else -> Icons.Default.Psychology
+                                            "FOCUS" -> Icons.Default.Psychology
+                                            else -> Icons.Default.Star
                                         },
                                         contentDescription = null,
                                         tint = MaterialTheme.colorScheme.primary,

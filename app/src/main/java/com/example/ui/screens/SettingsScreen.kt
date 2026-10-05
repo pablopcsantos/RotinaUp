@@ -3,6 +3,7 @@ package com.example.ui.screens
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -55,7 +56,9 @@ fun SettingsScreen(
     var typeFocus by remember(settings) { mutableStateOf(settings.typeFocusName) }
     var typeExercise by remember(settings) { mutableStateOf(settings.typeExerciseName) }
     var typeWater by remember(settings) { mutableStateOf(settings.typeWaterName) }
-    var typeCustom by remember(settings) { mutableStateOf(settings.typeCustomName) }
+    var customTypesList by remember(settings) { mutableStateOf(settings.getCustomTypesList()) }
+    var newCustomTypeName by remember { mutableStateOf("") }
+    var mandatoryDeadline by remember(settings) { mutableStateOf(settings.mandatoryDeadlineTime) }
 
     fun copyToClipboard(label: String, text: String) {
         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
@@ -226,19 +229,23 @@ fun SettingsScreen(
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.EditNote, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                            Icon(Icons.Default.Category, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                             Spacer(modifier = Modifier.width(10.dp))
                             Column {
-                                Text("Nomes dos Tipos de Hábitos", fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                                Text("Personalize como cada categoria é chamada", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("Tipos de Hábitos", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                Text("4 tipos padrão + tipos personalizados ilimitados (+/-)", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }
                         Spacer(modifier = Modifier.height(14.dp))
 
+                        Text("Tipos Padrão do Sistema:", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                        Spacer(modifier = Modifier.height(6.dp))
+
                         OutlinedTextField(
                             value = typeSleep,
                             onValueChange = { typeSleep = it },
-                            label = { Text("Tipo: Sono") },
+                            label = { Text("Padrão 1: Sono") },
+                            leadingIcon = { Icon(Icons.Default.Nightlight, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp)) },
                             singleLine = true,
                             shape = RoundedCornerShape(14.dp),
                             modifier = Modifier.fillMaxWidth()
@@ -248,7 +255,8 @@ fun SettingsScreen(
                         OutlinedTextField(
                             value = typeFocus,
                             onValueChange = { typeFocus = it },
-                            label = { Text("Tipo: Foco") },
+                            label = { Text("Padrão 2: Foco") },
+                            leadingIcon = { Icon(Icons.Default.Psychology, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp)) },
                             singleLine = true,
                             shape = RoundedCornerShape(14.dp),
                             modifier = Modifier.fillMaxWidth()
@@ -258,7 +266,8 @@ fun SettingsScreen(
                         OutlinedTextField(
                             value = typeExercise,
                             onValueChange = { typeExercise = it },
-                            label = { Text("Tipo: Exercício") },
+                            label = { Text("Padrão 3: Exercício") },
+                            leadingIcon = { Icon(Icons.Default.FitnessCenter, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp)) },
                             singleLine = true,
                             shape = RoundedCornerShape(14.dp),
                             modifier = Modifier.fillMaxWidth()
@@ -268,42 +277,153 @@ fun SettingsScreen(
                         OutlinedTextField(
                             value = typeWater,
                             onValueChange = { typeWater = it },
-                            label = { Text("Tipo: Água") },
+                            label = { Text("Padrão 4: Água") },
+                            leadingIcon = { Icon(Icons.Default.WaterDrop, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp)) },
                             singleLine = true,
                             shape = RoundedCornerShape(14.dp),
                             modifier = Modifier.fillMaxWidth()
                         )
+
+                        Spacer(modifier = Modifier.height(16.dp))
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text("Tipos Personalizados:", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                Text("Adicione ou remova quantos tipos desejar", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            Badge(containerColor = MaterialTheme.colorScheme.primaryContainer) {
+                                Text("${customTypesList.size}", color = MaterialTheme.colorScheme.onPrimaryContainer, fontSize = 10.sp)
+                            }
+                        }
                         Spacer(modifier = Modifier.height(8.dp))
 
-                        OutlinedTextField(
-                            value = typeCustom,
-                            onValueChange = { typeCustom = it },
-                            label = { Text("Tipo: Personalizado") },
-                            singleLine = true,
-                            shape = RoundedCornerShape(14.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        )
+                        // Add new custom type row with (+) button
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            OutlinedTextField(
+                                value = newCustomTypeName,
+                                onValueChange = { newCustomTypeName = it },
+                                label = { Text("Novo tipo personalizado") },
+                                placeholder = { Text("Ex: Leitura, Estudo, Meditação...") },
+                                singleLine = true,
+                                shape = RoundedCornerShape(14.dp),
+                                modifier = Modifier.weight(1f)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            FilledTonalIconButton(
+                                onClick = {
+                                    val trimmed = newCustomTypeName.trim()
+                                    if (trimmed.isNotBlank()) {
+                                        if (customTypesList.none { it.equals(trimmed, ignoreCase = true) }) {
+                                            customTypesList = customTypesList + trimmed
+                                            newCustomTypeName = ""
+                                        } else {
+                                            viewModel.showToast("Este tipo já existe na lista.")
+                                        }
+                                    }
+                                },
+                                enabled = newCustomTypeName.isNotBlank(),
+                                shape = RoundedCornerShape(14.dp),
+                                modifier = Modifier.size(52.dp)
+                            ) {
+                                Icon(Icons.Default.Add, contentDescription = "Adicionar tipo (+)", modifier = Modifier.size(24.dp))
+                            }
+                        }
 
-                        Spacer(modifier = Modifier.height(14.dp))
+                        // List of custom types with (-) button
+                        if (customTypesList.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                customTypesList.forEachIndexed { index, customName ->
+                                    Surface(
+                                        shape = RoundedCornerShape(12.dp),
+                                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                modifier = Modifier.weight(1f)
+                                            ) {
+                                                Icon(
+                                                    Icons.Default.Star,
+                                                    contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.primary,
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(10.dp))
+                                                Text(
+                                                    text = customName,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    fontSize = 13.sp
+                                                )
+                                            }
+                                            IconButton(
+                                                onClick = {
+                                                    customTypesList = customTypesList.filterIndexed { i, _ -> i != index }
+                                                },
+                                                modifier = Modifier.size(36.dp)
+                                            ) {
+                                                Icon(
+                                                    Icons.Default.RemoveCircleOutline,
+                                                    contentDescription = "Remover tipo (-)",
+                                                    tint = MaterialTheme.colorScheme.error,
+                                                    modifier = Modifier.size(20.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = "Nenhum tipo personalizado adicionado. Use o campo acima e toque em (+) para criar novos.",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
                         Button(
                             onClick = {
+                                val serializedCustoms = if (customTypesList.isEmpty()) "Personalizado" else customTypesList.joinToString("||")
                                 viewModel.updateSettings(
                                     settings.copy(
                                         typeSleepName = typeSleep.trim().ifBlank { "Sono" },
                                         typeFocusName = typeFocus.trim().ifBlank { "Foco" },
                                         typeExerciseName = typeExercise.trim().ifBlank { "Exercício" },
                                         typeWaterName = typeWater.trim().ifBlank { "Água" },
-                                        typeCustomName = typeCustom.trim().ifBlank { "Personalizado" }
+                                        typeCustomName = customTypesList.firstOrNull() ?: "Personalizado",
+                                        customHabitTypes = serializedCustoms
                                     )
                                 )
-                                viewModel.showToast("Nomes dos tipos atualizados com sucesso!")
+                                viewModel.showToast("Tipos de hábitos salvos com sucesso!")
                             },
                             shape = RoundedCornerShape(14.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Salvar Nomes dos Tipos", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            Text("Salvar Tipos de Hábitos", fontWeight = FontWeight.Bold, fontSize = 13.sp)
                         }
                     }
                 }
@@ -388,6 +508,135 @@ fun SettingsScreen(
                                 Icon(Icons.Default.VolumeUp, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text("Testar Som do Alarme de Lembrete", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ==================== 5. LEMBRETE DE ETAPAS ATRASADAS ====================
+            item {
+                Card(
+                    shape = RoundedCornerShape(22.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.AccessTimeFilled, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Column {
+                                    Text("Lembrete de Etapas Atrasadas", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                    Text("Alarmes para sono e diário não concluídos", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                            Switch(
+                                checked = settings.mandatoryRemindersEnabled,
+                                onCheckedChange = { viewModel.updateSettings(settings.copy(mandatoryRemindersEnabled = it)) }
+                            )
+                        }
+
+                        if (settings.mandatoryRemindersEnabled) {
+                            Spacer(modifier = Modifier.height(14.dp))
+
+                            Text("Horário Limite para Conclusão:", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                OutlinedTextField(
+                                    value = mandatoryDeadline,
+                                    onValueChange = {
+                                        mandatoryDeadline = it
+                                        if (it.length == 5 && it.contains(":")) {
+                                            viewModel.updateSettings(settings.copy(mandatoryDeadlineTime = it.trim()))
+                                        }
+                                    },
+                                    label = { Text("Horário Limite (HH:mm)") },
+                                    placeholder = { Text("Ex: 22:00") },
+                                    singleLine = true,
+                                    shape = RoundedCornerShape(14.dp),
+                                    leadingIcon = {
+                                        Icon(Icons.Default.Schedule, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
+                                    },
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                FilledTonalButton(
+                                    onClick = {
+                                        val valid = mandatoryDeadline.trim().ifBlank { "22:00" }
+                                        viewModel.updateSettings(settings.copy(mandatoryDeadlineTime = valid))
+                                        viewModel.showToast("Horário limite salvo: $valid")
+                                    },
+                                    shape = RoundedCornerShape(14.dp)
+                                ) {
+                                    Text("Salvar", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                }
+                            }
+                            Text(
+                                text = "Se o sono noturno e o diário não forem preenchidos até este horário, os alarmes serão acionados.",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                                modifier = Modifier.padding(top = 4.dp)
+                            )
+
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text("Intervalo entre lembretes:", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Spacer(modifier = Modifier.height(6.dp))
+
+                            // Same interval chips as overdue habits
+                            val intervals = listOf(
+                                Pair(5, "5m"),
+                                Pair(10, "10m"),
+                                Pair(15, "15m"),
+                                Pair(30, "30m"),
+                                Pair(45, "45m"),
+                                Pair(60, "1h"),
+                                Pair(120, "2h")
+                            )
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                intervals.forEach { (mins, label) ->
+                                    FilterChip(
+                                        selected = settings.mandatoryIntervalMinutes == mins,
+                                        onClick = { viewModel.updateSettings(settings.copy(mandatoryIntervalMinutes = mins)) },
+                                        label = { Text(label, fontSize = 10.sp, fontWeight = FontWeight.Bold) }
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("Alarme sonoro ao disparar lembrete", fontSize = 12.sp)
+                                Switch(
+                                    checked = settings.mandatoryAlarmSound,
+                                    onCheckedChange = { viewModel.updateSettings(settings.copy(mandatoryAlarmSound = it)) }
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(6.dp))
+                            TextButton(
+                                onClick = {
+                                    viewModel.audioPlayer.playOverdueChime()
+                                    viewModel.showToast("Alarme de teste de etapas obrigatórias reproduzido!")
+                                }
+                            ) {
+                                Icon(Icons.Default.VolumeUp, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Testar Som do Alarme", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                     }

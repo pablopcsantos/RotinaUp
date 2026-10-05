@@ -5,15 +5,13 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Widgets
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -21,13 +19,15 @@ import androidx.compose.ui.window.Dialog
 import com.example.data.model.Habit
 import com.example.data.model.UserSettings
 
-private val HABIT_TYPES = listOf(
-    Pair("SLEEP", "Sono"),
-    Pair("FOCUS", "Foco"),
-    Pair("EXERCISE", "Exercício"),
-    Pair("WATER", "Água"),
-    Pair("CUSTOM", "Personalizado")
-)
+private fun getHabitTypeIcon(typeKey: String): ImageVector {
+    return when (typeKey.uppercase()) {
+        "SLEEP" -> Icons.Default.Nightlight
+        "FOCUS" -> Icons.Default.Psychology
+        "EXERCISE" -> Icons.Default.FitnessCenter
+        "WATER" -> Icons.Default.WaterDrop
+        else -> Icons.Default.Star
+    }
+}
 
 private val DAYS_OF_WEEK = listOf(
     Pair(1, "Seg"),
@@ -39,6 +39,7 @@ private val DAYS_OF_WEEK = listOf(
     Pair(7, "Dom")
 )
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HabitEditDialog(
     habitToEdit: Habit?,
@@ -46,6 +47,17 @@ fun HabitEditDialog(
     onDismiss: () -> Unit,
     onSave: (Habit) -> Unit
 ) {
+    val availableTypes = remember(settings) {
+        settings?.getAllHabitTypes() ?: listOf(
+            Pair("SLEEP", "Sono"),
+            Pair("FOCUS", "Foco"),
+            Pair("EXERCISE", "Exercício"),
+            Pair("WATER", "Água"),
+            Pair("CUSTOM", "Personalizado")
+        )
+    }
+    var expandedTypeDropdown by remember { mutableStateOf(false) }
+
     var name by remember { mutableStateOf(habitToEdit?.name ?: "") }
     var type by remember { mutableStateOf(habitToEdit?.type ?: "FOCUS") }
     var targetTime by remember { mutableStateOf(habitToEdit?.targetTime ?: "08:00") }
@@ -127,23 +139,94 @@ fun HabitEditDialog(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // Type selector
-                Text("Tipo de Hábito:", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Spacer(modifier = Modifier.height(6.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                // Type selector with ExposedDropdownMenuBox (dropdown menu)
+                val currentTypeLabel = remember(type, availableTypes) {
+                    availableTypes.find { it.first.equals(type, ignoreCase = true) }?.second
+                        ?: settings?.getTypeLabel(type)
+                        ?: type
+                }
+
+                Text(
+                    text = "Tipo de Hábito *",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+
+                ExposedDropdownMenuBox(
+                    expanded = expandedTypeDropdown,
+                    onExpandedChange = { expandedTypeDropdown = !expandedTypeDropdown },
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    HABIT_TYPES.forEach { (tKey, tLabel) ->
-                        val displayLabel = settings?.getTypeLabel(tKey) ?: tLabel
-                        FilterChip(
-                            selected = type == tKey,
-                            onClick = {
-                                type = tKey
-                                updateDefaultPhrase(tKey)
-                            },
-                            label = { Text(displayLabel, fontSize = 10.sp, fontWeight = FontWeight.Bold) }
-                        )
+                    OutlinedTextField(
+                        value = currentTypeLabel,
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Selecione o tipo do hábito") },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = getHabitTypeIcon(type),
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        },
+                        trailingIcon = {
+                            ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedTypeDropdown)
+                        },
+                        shape = RoundedCornerShape(14.dp),
+                        colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
+                        modifier = Modifier
+                            .menuAnchor()
+                            .fillMaxWidth()
+                    )
+
+                    ExposedDropdownMenu(
+                        expanded = expandedTypeDropdown,
+                        onDismissRequest = { expandedTypeDropdown = false }
+                    ) {
+                        availableTypes.forEach { (tKey, tLabel) ->
+                            val isSelected = type.equals(tKey, ignoreCase = true)
+                            DropdownMenuItem(
+                                text = {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(
+                                                imageVector = getHabitTypeIcon(tKey),
+                                                contentDescription = null,
+                                                tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(12.dp))
+                                            Text(
+                                                text = tLabel,
+                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                            )
+                                        }
+                                        if (isSelected) {
+                                            Icon(
+                                                Icons.Default.Check,
+                                                contentDescription = "Selecionado",
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                        }
+                                    }
+                                },
+                                onClick = {
+                                    type = tKey
+                                    updateDefaultPhrase(tKey)
+                                    expandedTypeDropdown = false
+                                },
+                                contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding
+                            )
+                        }
                     }
                 }
 

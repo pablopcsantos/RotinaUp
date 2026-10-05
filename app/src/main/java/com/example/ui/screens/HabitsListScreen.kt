@@ -105,12 +105,12 @@ fun HabitsListScreen(
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Icon(
-                                        imageVector = when (habit.type) {
+                                        imageVector = when (habit.type.uppercase()) {
                                             "SLEEP" -> Icons.Default.Nightlight
                                             "EXERCISE" -> Icons.Default.FitnessCenter
                                             "WATER" -> Icons.Default.WaterDrop
-                                            "CUSTOM" -> Icons.Default.Star
-                                            else -> Icons.Default.Psychology
+                                            "FOCUS" -> Icons.Default.Psychology
+                                            else -> Icons.Default.Star
                                         },
                                         contentDescription = null,
                                         tint = MaterialTheme.colorScheme.primary,
@@ -125,6 +125,15 @@ fun HabitsListScreen(
                                         fontSize = 14.sp
                                     )
                                     Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = settings.getTypeLabel(habit.type),
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("•", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
+                                        Spacer(modifier = Modifier.width(6.dp))
                                         Text(
                                             text = "${habit.targetTime}${if (habit.durationMinutes != null) " • ${habit.durationMinutes}min" else ""}",
                                             fontSize = 11.sp,

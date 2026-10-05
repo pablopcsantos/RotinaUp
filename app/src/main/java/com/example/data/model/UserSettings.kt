@@ -25,16 +25,45 @@ data class UserSettings(
     val typeFocusName: String = "Foco",
     val typeExerciseName: String = "Exercício",
     val typeWaterName: String = "Água",
-    val typeCustomName: String = "Personalizado"
+    val typeCustomName: String = "Personalizado",
+    val customHabitTypes: String = "Personalizado",
+    // Mandatory Steps Overdue Reminders
+    val mandatoryRemindersEnabled: Boolean = true,
+    val mandatoryDeadlineTime: String = "22:00",
+    val mandatoryIntervalMinutes: Int = 15,
+    val mandatoryAlarmSound: Boolean = true
 ) {
+    fun getCustomTypesList(): List<String> {
+        return customHabitTypes.split("||")
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .ifEmpty { listOf(typeCustomName.ifBlank { "Personalizado" }) }
+    }
+
+    fun getAllHabitTypes(): List<Pair<String, String>> {
+        val standard = listOf(
+            Pair("SLEEP", typeSleepName.ifBlank { "Sono" }),
+            Pair("FOCUS", typeFocusName.ifBlank { "Foco" }),
+            Pair("EXERCISE", typeExerciseName.ifBlank { "Exercício" }),
+            Pair("WATER", typeWaterName.ifBlank { "Água" })
+        )
+        val customs = getCustomTypesList().map { customName ->
+            val key = if (customName.equals("Personalizado", ignoreCase = true)) "CUSTOM" else customName
+            Pair(key, customName)
+        }
+        return standard + customs
+    }
+
     fun getTypeLabel(type: String): String {
         return when (type.uppercase()) {
-            "SLEEP" -> typeSleepName
-            "FOCUS" -> typeFocusName
-            "EXERCISE" -> typeExerciseName
-            "WATER" -> typeWaterName
-            "CUSTOM" -> typeCustomName
-            else -> typeCustomName
+            "SLEEP" -> typeSleepName.ifBlank { "Sono" }
+            "FOCUS" -> typeFocusName.ifBlank { "Foco" }
+            "EXERCISE" -> typeExerciseName.ifBlank { "Exercício" }
+            "WATER" -> typeWaterName.ifBlank { "Água" }
+            "CUSTOM" -> typeCustomName.ifBlank { "Personalizado" }
+            else -> {
+                getCustomTypesList().find { it.equals(type, ignoreCase = true) } ?: type
+            }
         }
     }
 }

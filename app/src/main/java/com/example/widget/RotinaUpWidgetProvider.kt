@@ -76,50 +76,41 @@ class RotinaUpWidgetProvider : AppWidgetProvider() {
                     val habits = allActiveHabits.filter { it.showInWidget }
                     val allLogs = db.habitDao().getAllLogs().firstOrNull() ?: emptyList()
 
-                    val habitRows = listOf(
-                        Triple(R.id.h1_row, R.id.h1_name, R.id.h1_time) to listOf(
-                            R.id.h1_d1, R.id.h1_d2, R.id.h1_d3, R.id.h1_d4, R.id.h1_d5, R.id.h1_d6, R.id.h1_d7
-                        ),
-                        Triple(R.id.h2_row, R.id.h2_name, R.id.h2_time) to listOf(
-                            R.id.h2_d1, R.id.h2_d2, R.id.h2_d3, R.id.h2_d4, R.id.h2_d5, R.id.h2_d6, R.id.h2_d7
-                        ),
-                        Triple(R.id.h3_row, R.id.h3_name, R.id.h3_time) to listOf(
-                            R.id.h3_d1, R.id.h3_d2, R.id.h3_d3, R.id.h3_d4, R.id.h3_d5, R.id.h3_d6, R.id.h3_d7
-                        )
+                    views.removeAllViews(R.id.widget_habits_container)
+
+                    val dotIds = listOf(
+                        R.id.dot_1, R.id.dot_2, R.id.dot_3,
+                        R.id.dot_4, R.id.dot_5, R.id.dot_6, R.id.dot_7
                     )
 
-                    habitRows.forEachIndexed { index, (viewsInfo, dotIds) ->
-                        val (rowId, nameId, timeId) = viewsInfo
-                        if (index < habits.size) {
-                            val habit = habits[index]
-                            views.setViewVisibility(rowId, View.VISIBLE)
-                            views.setTextViewText(nameId, habit.name)
-                            views.setTextViewText(timeId, habit.targetTime)
+                    habits.forEach { habit ->
+                        val rowView = RemoteViews(context.packageName, R.layout.widget_habit_item)
+                        rowView.setTextViewText(R.id.habit_item_name, habit.name)
+                        rowView.setTextViewText(R.id.habit_item_time, habit.targetTime)
 
-                            // Populate 7-day adherence dots
-                            last7Days.forEachIndexed { dIdx, (dateStr, _, isToday) ->
-                                if (dIdx < dotIds.size) {
-                                    val dotId = dotIds[dIdx]
-                                    val log = allLogs.find { it.habitId == habit.id && it.date == dateStr }
-                                    val isoDay = DateUtils.getIsoDayOfWeek(dateStr)
-                                    val isScheduled = habit.daysOfWeek.split(",")
-                                        .mapNotNull { it.trim().toIntOrNull() }
-                                        .contains(isoDay)
+                        // Populate 7-day adherence dots
+                        last7Days.forEachIndexed { dIdx, (dateStr, _, isToday) ->
+                            if (dIdx < dotIds.size) {
+                                val dotId = dotIds[dIdx]
+                                val log = allLogs.find { it.habitId == habit.id && it.date == dateStr }
+                                val isoDay = DateUtils.getIsoDayOfWeek(dateStr)
+                                val isScheduled = habit.daysOfWeek.split(",")
+                                    .mapNotNull { it.trim().toIntOrNull() }
+                                    .contains(isoDay)
 
-                                    val dotDrawable = when {
-                                        log?.status == "DONE" -> R.drawable.widget_dot_done
-                                        log?.status == "PARTIAL" -> R.drawable.widget_dot_partial
-                                        log?.status == "SKIPPED" -> R.drawable.widget_dot_missed
-                                        !isScheduled -> R.drawable.widget_dot_empty
-                                        !isToday -> R.drawable.widget_dot_missed
-                                        else -> R.drawable.widget_dot_empty
-                                    }
-                                    views.setImageViewResource(dotId, dotDrawable)
+                                val dotDrawable = when {
+                                    log?.status == "DONE" -> R.drawable.widget_dot_done
+                                    log?.status == "PARTIAL" -> R.drawable.widget_dot_partial
+                                    log?.status == "SKIPPED" -> R.drawable.widget_dot_missed
+                                    !isScheduled -> R.drawable.widget_dot_empty
+                                    !isToday -> R.drawable.widget_dot_missed
+                                    else -> R.drawable.widget_dot_empty
                                 }
+                                rowView.setImageViewResource(dotId, dotDrawable)
                             }
-                        } else {
-                            views.setViewVisibility(rowId, View.GONE)
                         }
+
+                        views.addView(R.id.widget_habits_container, rowView)
                     }
 
                     if (habits.isEmpty()) {
@@ -127,15 +118,10 @@ class RotinaUpWidgetProvider : AppWidgetProvider() {
                             R.id.widget_more_text,
                             "Nenhum hábito no widget • Toque para configurar"
                         )
-                    } else if (habits.size > 3) {
-                        views.setTextViewText(
-                            R.id.widget_more_text,
-                            "+ ${habits.size - 3} outros no widget • Toque para abrir"
-                        )
                     } else {
                         views.setTextViewText(
                             R.id.widget_more_text,
-                            "🟢 Feito  🟠 Parcial  🔴 Não feito"
+                            "${habits.size} hábito${if (habits.size > 1) "s" else ""} no widget • 🟢 Feito 🟠 Parcial 🔴 Não feito"
                         )
                     }
 
