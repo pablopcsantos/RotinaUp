@@ -146,6 +146,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     showToast(msg)
                 }
             }
+            com.example.widget.RotinaUpWidgetProvider.updateAllWidgets(getApplication())
         }
     }
 
@@ -158,6 +159,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 habitoRepository.updateHabit(habit.copy(updatedAt = System.currentTimeMillis()))
                 showToast("Hábito atualizado!")
             }
+            com.example.widget.RotinaUpWidgetProvider.updateAllWidgets(getApplication())
         }
     }
 
@@ -165,6 +167,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             habitoRepository.deleteHabit(habit)
             showToast("Hábito excluído.")
+            com.example.widget.RotinaUpWidgetProvider.updateAllWidgets(getApplication())
         }
     }
 
@@ -173,6 +176,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val updated = habit.copy(isActive = !habit.isActive, updatedAt = System.currentTimeMillis())
             habitoRepository.updateHabit(updated)
             showToast("Hábito ${if (updated.isActive) "ativado" else "desativado"}")
+            com.example.widget.RotinaUpWidgetProvider.updateAllWidgets(getApplication())
         }
     }
 
@@ -779,6 +783,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         sleepDao.insertAllNapLogs(dummyNaps)
         sleepDao.insertAllDailyReviews(dummyReviews)
         settingsDao.insertOrUpdateSettings(UserSettings(isDummyActive = true, hasSeenDummyPrompt = false))
+        com.example.widget.RotinaUpWidgetProvider.updateAllWidgets(getApplication())
     }
 
     override fun onCleared() {

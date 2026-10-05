@@ -8,6 +8,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Widgets
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -59,6 +60,7 @@ fun HabitEditDialog(
     var positiveConsequence by remember { mutableStateOf(habitToEdit?.positiveConsequence ?: "") }
     var negativeConsequence by remember { mutableStateOf(habitToEdit?.negativeConsequence ?: "") }
     var dismissPhrase by remember { mutableStateOf(habitToEdit?.dismissPhrase ?: "vou estudar sem distracao") }
+    var showInWidget by remember { mutableStateOf(habitToEdit?.showInWidget ?: true) }
 
     var nameError by remember { mutableStateOf(false) }
 
@@ -269,6 +271,53 @@ fun HabitEditDialog(
                     }
                 }
 
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Mechanism to configure presentation in homescreen widget (Requirement 3)
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            modifier = Modifier.weight(1f),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Default.Widgets,
+                                contentDescription = null,
+                                tint = if (showInWidget) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(22.dp)
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    text = "Apresentar no Widget",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = if (showInWidget) "Hábito visível no widget da tela inicial" else "Hábito oculto do widget da tela inicial",
+                                    fontSize = 10.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                        Switch(
+                            checked = showInWidget,
+                            onCheckedChange = { showInWidget = it }
+                        )
+                    }
+                }
+
                 Spacer(modifier = Modifier.height(20.dp))
 
                 // Submit button
@@ -287,6 +336,7 @@ fun HabitEditDialog(
                             daysOfWeek = selectedDays.sorted().joinToString(","),
                             priority = priority,
                             isActive = habitToEdit?.isActive ?: true,
+                            showInWidget = showInWidget,
                             positiveConsequence = positiveConsequence.trim(),
                             negativeConsequence = negativeConsequence.trim(),
                             dismissPhrase = dismissPhrase.trim().ifBlank { "eu assumo o compromisso" },

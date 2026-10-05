@@ -10,6 +10,9 @@ interface HabitoDao {
     @Query("SELECT * FROM habitos WHERE isActive = 1 ORDER BY targetTime ASC")
     fun getAllActiveHabits(): Flow<List<Habito>>
 
+    @Query("SELECT * FROM habitos WHERE isActive = 1 AND showInWidget = 1 ORDER BY targetTime ASC")
+    fun getWidgetHabits(): Flow<List<Habito>>
+
     @Query("SELECT * FROM habitos ORDER BY targetTime ASC")
     fun getAllHabits(): Flow<List<Habito>>
 

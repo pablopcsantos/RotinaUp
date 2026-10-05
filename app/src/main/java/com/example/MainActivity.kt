@@ -29,18 +29,17 @@ import com.example.data.model.Habito
 import com.example.ui.components.*
 import com.example.ui.screens.*
 import com.example.ui.theme.RotinaVivaTheme
-import com.example.ui.viewmodel.HabitoViewModel
 import com.example.ui.viewmodel.MainViewModel
 import com.example.util.DateUtils
 import kotlinx.coroutines.delay
 
 class MainActivity : ComponentActivity() {
     private val viewModel: MainViewModel by viewModels()
-    private val habitoViewModel: HabitoViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        handleWidgetIntent(intent)
 
         setContent {
             val settings by viewModel.userSettings.collectAsState()
@@ -57,11 +56,24 @@ class MainActivity : ComponentActivity() {
                 ) {
                     RotinaUpApp(
                         viewModel = viewModel,
-                        habitoViewModel = habitoViewModel,
-                        isDarkTheme = isDarkTheme
+                        isDarkTheme = isDarkTheme,
+                        intent = intent
                     )
                 }
             }
+        }
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleWidgetIntent(intent)
+    }
+
+    private fun handleWidgetIntent(intent: android.content.Intent?) {
+        if (intent?.getBooleanExtra("from_widget", false) == true) {
+            // Opened via home screen widget: snooze popups so user lands cleanly on the today view
+            viewModel.snoozeOverdue(5)
         }
     }
 }
@@ -69,8 +81,8 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun RotinaUpApp(
     viewModel: MainViewModel,
-    habitoViewModel: HabitoViewModel,
-    isDarkTheme: Boolean
+    isDarkTheme: Boolean,
+    intent: android.content.Intent? = null
 ) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -80,10 +92,20 @@ fun RotinaUpApp(
     val toastMessage by viewModel.toastMessage.collectAsState()
     val consequence by viewModel.consequence.collectAsState()
 
-    val activeHabitsList by habitoViewModel.activeHabits.collectAsState()
-    val todayLogsList by habitoViewModel.todayLogs.collectAsState()
+    val activeHabitsList by viewModel.activeHabits.collectAsState()
+    val todayLogsList by viewModel.todayLogs.collectAsState()
     val currentTimeStr by viewModel.currentTimeStr.collectAsState()
     val snoozeUntil by viewModel.snoozeUntil.collectAsState()
+
+    // Settle delay to ensure Room database flows have emitted their initial disk state
+    // before any modal dialog or alarm evaluation occurs (eliminates startup dialog flash)
+    var isDataSettled by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        delay(600)
+        isDataSettled = true
+    }
+
+    val isFromWidget = remember(intent) { intent?.getBooleanExtra("from_widget", false) == true }
 
     // State for PIN screen lock
     var isUnlocked by remember { mutableStateOf(!settings.requireAuth || settings.pinCode.isNullOrBlank()) }
@@ -98,8 +120,8 @@ fun RotinaUpApp(
     val todayIsoDay = remember(viewModel.todayDateStr) { DateUtils.getIsoDayOfWeek(viewModel.todayDateStr) }
     val todayLogsMap = remember(todayLogsList) { todayLogsList.associateBy { it.habitId } }
 
-    val overdueHabitForAlarm = remember(activeHabitsList, todayLogsMap, currentTimeStr, settings.overdueRemindersEnabled, snoozeUntil) {
-        if (!settings.overdueRemindersEnabled || System.currentTimeMillis() < snoozeUntil) null
+    val overdueHabitForAlarm = remember(isDataSettled, activeHabitsList, todayLogsMap, currentTimeStr, settings.overdueRemindersEnabled, snoozeUntil, isFromWidget) {
+        if (!isDataSettled || isFromWidget || !settings.overdueRemindersEnabled || System.currentTimeMillis() < snoozeUntil) null
         else {
             activeHabitsList.firstOrNull { h ->
                 val days = h.daysOfWeek.split(",").mapNotNull { it.trim().toIntOrNull() }
@@ -231,8 +253,8 @@ fun RotinaUpApp(
         )
     }
 
-    // 8. Dummy Content Notice (First Launch)
-    if (settings.isDummyActive && !settings.hasSeenDummyPrompt) {
+    // 8. Dummy Content Notice (First Launch - only after data has settled and not when launched from widget)
+    if (isDataSettled && !isFromWidget && settings.isDummyActive && !settings.hasSeenDummyPrompt) {
         DummyContentDialog(
             onDismiss = { viewModel.dismissDummyPrompt() },
             onClearImmediately = { viewModel.clearDummyContent() }

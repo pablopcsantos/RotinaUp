@@ -14,6 +14,7 @@ data class Habito(
     val daysOfWeek: String = "1,2,3,4,5,6,7", // 1=Mon, 7=Sun
     val priority: Int = 1, // 1=Alta, 2=Média, 3=Baixa
     val isActive: Boolean = true,
+    val showInWidget: Boolean = true,
     val positiveConsequence: String = "",
     val negativeConsequence: String = "",
     val dismissPhrase: String = "eu assumo o compromisso",

@@ -39,7 +39,8 @@ fun WidgetPreviewModal(
     onQuickCheckIn: (Habito, String) -> Unit
 ) {
     val context = LocalContext.current
-    val activeHabits = habits.filter { it.isActive }
+    val activeHabits = habits.filter { it.isActive && it.showInWidget }
+    val hiddenCount = habits.count { it.isActive && !it.showInWidget }
     val todayLogsMap = logs.associateBy { it.habitId }
     val last7Days = DateUtils.getLast7Days()
 
@@ -119,7 +120,11 @@ fun WidgetPreviewModal(
                         }
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "O widget na tela inicial exibe todos os hábitos com histórico visual dos últimos 7 dias atualizado em tempo real.",
+                            text = if (hiddenCount > 0) {
+                                "Exibindo ${activeHabits.size} hábito(s) configurado(s) ($hiddenCount oculto(s) do widget)."
+                            } else {
+                                "O widget na tela inicial exibe os hábitos com histórico visual dos últimos 7 dias atualizado em tempo real."
+                            },
                             fontSize = 11.sp,
                             lineHeight = 16.sp,
                             color = MaterialTheme.colorScheme.onSurface

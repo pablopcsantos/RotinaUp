@@ -39,7 +39,8 @@ class RotinaUpWidgetProvider : AppWidgetProvider() {
             val views = RemoteViews(context.packageName, R.layout.widget_rotinaup)
 
             val intent = Intent(context, MainActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                putExtra("from_widget", true)
             }
             val pendingIntent = PendingIntent.getActivity(
                 context,
@@ -50,7 +51,10 @@ class RotinaUpWidgetProvider : AppWidgetProvider() {
 
             views.setOnClickPendingIntent(R.id.widget_root, pendingIntent)
             views.setTextViewText(R.id.widget_title, "RotinaUp")
+            views.setTextColor(R.id.widget_title, 0xFF38BDF8.toInt())
             views.setTextViewText(R.id.widget_date, DateUtils.getNowTimeStr())
+            views.setTextColor(R.id.widget_date, 0xFF94A3B8.toInt())
+            views.setTextColor(R.id.widget_more_text, 0xFF94A3B8.toInt())
 
             // Set last 7 days initials
             val last7Days = DateUtils.getLast7Days()
@@ -68,7 +72,8 @@ class RotinaUpWidgetProvider : AppWidgetProvider() {
             CoroutineScope(Dispatchers.IO).launch {
                 try {
                     val db = AppDatabase.getDatabase(context)
-                    val habits = db.habitDao().getAllActiveHabits().firstOrNull() ?: emptyList()
+                    val allActiveHabits = db.habitDao().getAllActiveHabits().firstOrNull() ?: emptyList()
+                    val habits = allActiveHabits.filter { it.showInWidget }
                     val allLogs = db.habitDao().getAllLogs().firstOrNull() ?: emptyList()
 
                     val habitRows = listOf(
@@ -117,10 +122,15 @@ class RotinaUpWidgetProvider : AppWidgetProvider() {
                         }
                     }
 
-                    if (habits.size > 3) {
+                    if (habits.isEmpty()) {
                         views.setTextViewText(
                             R.id.widget_more_text,
-                            "+ ${habits.size - 3} outros hábitos • Toque para ver no app"
+                            "Nenhum hábito no widget • Toque para configurar"
+                        )
+                    } else if (habits.size > 3) {
+                        views.setTextViewText(
+                            R.id.widget_more_text,
+                            "+ ${habits.size - 3} outros no widget • Toque para abrir"
                         )
                     } else {
                         views.setTextViewText(

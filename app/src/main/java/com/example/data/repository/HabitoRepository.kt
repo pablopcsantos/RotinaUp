@@ -10,6 +10,7 @@ class HabitoRepository(
 ) {
     val allHabits: Flow<List<Habito>> = habitoDao.getAllHabits()
     val activeHabits: Flow<List<Habito>> = habitoDao.getAllActiveHabits()
+    val widgetHabits: Flow<List<Habito>> = habitoDao.getWidgetHabits()
     val allLogs: Flow<List<HabitLog>> = habitoDao.getAllLogs()
 
     fun getHabitById(id: Long): Flow<Habito?> = habitoDao.getHabitById(id)

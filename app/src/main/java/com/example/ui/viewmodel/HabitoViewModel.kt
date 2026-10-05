@@ -55,6 +55,7 @@ class HabitoViewModel(
             } else {
                 repository.updateHabit(habit.copy(updatedAt = System.currentTimeMillis()))
             }
+            com.example.widget.RotinaUpWidgetProvider.updateAllWidgets(getApplication())
             onSaved?.invoke()
         }
     }
@@ -62,6 +63,7 @@ class HabitoViewModel(
     fun deleteHabit(habit: Habito, onDeleted: (() -> Unit)? = null) {
         viewModelScope.launch {
             repository.deleteHabit(habit)
+            com.example.widget.RotinaUpWidgetProvider.updateAllWidgets(getApplication())
             onDeleted?.invoke()
         }
     }
@@ -70,6 +72,7 @@ class HabitoViewModel(
         viewModelScope.launch {
             val updated = habit.copy(isActive = !habit.isActive, updatedAt = System.currentTimeMillis())
             repository.updateHabit(updated)
+            com.example.widget.RotinaUpWidgetProvider.updateAllWidgets(getApplication())
         }
     }
 
@@ -90,6 +93,7 @@ class HabitoViewModel(
                     note = note
                 )
             )
+            com.example.widget.RotinaUpWidgetProvider.updateAllWidgets(getApplication())
         }
     }
 }
