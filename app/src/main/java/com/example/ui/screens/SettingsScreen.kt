@@ -12,6 +12,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -152,7 +154,7 @@ fun SettingsScreen(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.List, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                            Icon(Icons.AutoMirrored.Filled.List, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                             Spacer(modifier = Modifier.width(12.dp))
                             Column {
                                 Text("Gerenciar Todos os Hábitos", fontWeight = FontWeight.Bold, fontSize = 14.sp)
@@ -520,7 +522,7 @@ fun SettingsScreen(
                                     viewModel.showToast("Som de alarme de lembrete reproduzido!")
                                 }
                             ) {
-                                Icon(Icons.Default.VolumeUp, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Icon(Icons.AutoMirrored.Filled.VolumeUp, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text("Testar Som do Alarme de Lembrete", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             }
@@ -649,7 +651,7 @@ fun SettingsScreen(
                                     viewModel.showToast("Alarme de teste de etapas obrigatórias reproduzido!")
                                 }
                             ) {
-                                Icon(Icons.Default.VolumeUp, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Icon(Icons.AutoMirrored.Filled.VolumeUp, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text("Testar Som do Alarme", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             }

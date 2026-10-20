@@ -136,7 +136,14 @@ class RotinaUpWidgetProvider : AppWidgetProvider() {
                 appWidgetManager.updateAppWidget(appWidgetId, views)
             } catch (t: Throwable) {
                 android.util.Log.e("RotinaUpWidget", "Falha ao sincronizar dados do widget", t)
-                appWidgetManager.updateAppWidget(appWidgetId, views)
+                try {
+                    views.removeAllViews(R.id.widget_habits_container)
+                    views.setTextViewText(
+                        R.id.widget_more_text,
+                        "⚠️ Toque para abrir o app e sincronizar"
+                    )
+                    appWidgetManager.updateAppWidget(appWidgetId, views)
+                } catch (_: Throwable) {}
             }
         }
 

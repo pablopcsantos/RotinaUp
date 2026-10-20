@@ -125,7 +125,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 seedInitialData()
                 val updated = (current ?: UserSettings()).copy(hasSeededInitialData = true)
                 settingsDao.insertOrUpdateSettings(updated)
+            } else if (!current.pinCode.isNullOrBlank()) {
+                // Auto-migrate any legacy plain-text PIN immediately to salted PBKDF2 hash
+                val upgraded = com.example.util.SecurityUtils.createHashedSettings(current.pinCode, current)
+                settingsDao.insertOrUpdateSettings(upgraded)
             }
+            com.example.util.AlarmScheduler.rescheduleAllAlarms(getApplication())
         }
     }
 
@@ -203,13 +208,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun saveHabit(habit: Habit) {
         viewModelScope.launch {
-            if (habit.id == 0L) {
-                habitoRepository.insertHabit(habit)
+            val savedHabit = if (habit.id == 0L) {
+                val newId = habitoRepository.insertHabit(habit)
                 showToast("Hábito cadastrado!")
+                habit.copy(id = newId)
             } else {
-                habitoRepository.updateHabit(habit.copy(updatedAt = System.currentTimeMillis()))
+                val updated = habit.copy(updatedAt = System.currentTimeMillis())
+                habitoRepository.updateHabit(updated)
                 showToast("Hábito atualizado!")
+                updated
             }
+            com.example.util.AlarmScheduler.scheduleHabitReminder(getApplication(), savedHabit)
             com.example.widget.RotinaUpWidgetProvider.updateAllWidgets(getApplication())
         }
     }
@@ -217,6 +226,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun deleteHabit(habit: Habit) {
         viewModelScope.launch {
             habitoRepository.deleteHabit(habit)
+            com.example.util.AlarmScheduler.cancelHabitReminder(getApplication(), habit.id)
             showToast("Hábito excluído.")
             com.example.widget.RotinaUpWidgetProvider.updateAllWidgets(getApplication())
         }
@@ -226,6 +236,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             val updated = habit.copy(isActive = !habit.isActive, updatedAt = System.currentTimeMillis())
             habitoRepository.updateHabit(updated)
+            if (updated.isActive) {
+                com.example.util.AlarmScheduler.scheduleHabitReminder(getApplication(), updated)
+            } else {
+                com.example.util.AlarmScheduler.cancelHabitReminder(getApplication(), updated.id)
+            }
             showToast("Hábito ${if (updated.isActive) "ativado" else "desativado"}")
             com.example.widget.RotinaUpWidgetProvider.updateAllWidgets(getApplication())
         }
@@ -320,6 +335,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun updateSettings(settings: UserSettings) {
         viewModelScope.launch {
             settingsDao.insertOrUpdateSettings(settings)
+            com.example.util.AlarmScheduler.rescheduleAllAlarms(getApplication())
         }
     }
 
@@ -334,7 +350,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         updateSettings(current.copy(requireAuth = false, pinHash = null, pinSalt = null, pinCode = null))
     }
 
-    fun verifyPin(enteredPin: String): Boolean {
+    fun verifyPin(enteredPin: String, recordFailure: Boolean = true): Boolean {
         val current = userSettings.value
         val isValid = com.example.util.SecurityUtils.verifyPin(enteredPin, current)
         if (isValid) {
@@ -348,7 +364,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     settingsDao.insertOrUpdateSettings(upgraded)
                 }
             }
-        } else {
+        } else if (recordFailure) {
             com.example.util.SecurityUtils.recordFailedAttempt(getApplication())
         }
         return isValid
@@ -629,12 +645,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 title = "Guardião do Sono",
                 category = "sono",
                 icon = "🌙",
-                unlocked = avgSleep != null && avgSleep >= 7.0 && (bedtimeVar == null || bedtimeVar <= 1.0),
-                description = "Média de sono noturno ≥ 7h com horário de deitar regular.",
-                requirement = "≥ 7h de sono e desvio ≤ 1h",
+                unlocked = weeklySleep.size >= 5 && avgSleep != null && avgSleep >= 7.0 && (bedtimeVar != null && bedtimeVar <= 1.0),
+                description = "Média de sono noturno ≥ 7h com horário de deitar regular em pelo menos 5 noites.",
+                requirement = "≥ 5 noites, média ≥ 7h e desvio ≤ 1h",
                 currentProgress = avgSleep?.toFloat() ?: 0f,
                 targetProgress = 7.0f,
-                progressText = if (avgSleep != null) "${avgSleep}h / 7h média" else "Sem registros de sono"
+                progressText = when {
+                    weeklySleep.isEmpty() -> "Sem registros de sono"
+                    weeklySleep.size < 5 -> "${weeklySleep.size} de 5 noites registradas"
+                    avgSleep != null -> "${avgSleep}h / 7h média"
+                    else -> "Sem dados suficientes"
+                }
             ),
             WeeklyMedal(
                 id = "semana_imparavel",
@@ -677,24 +698,41 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 title = "Foco Inabalável",
                 category = "foco",
                 icon = "🎯",
-                unlocked = focusSkips == 0 && focusHabits.isNotEmpty(),
-                description = "Nenhum bloco de foco profundo foi pulado ao longo da semana.",
-                requirement = "Zero faltas em blocos de foco",
-                currentProgress = if (focusSkips == 0) 1f else 0f,
+                unlocked = focusHabits.isNotEmpty() && weeklyLogs.count { l -> focusHabits.any { it.id == l.habitId } && l.status == "DONE" } >= 3 && focusSkips == 0,
+                description = "Cumpriu blocos de foco sem nenhuma falta ou adiamento na semana.",
+                requirement = "≥ 3 blocos concluídos e zero faltas",
+                currentProgress = if (focusSkips == 0 && weeklyLogs.count { l -> focusHabits.any { it.id == l.habitId } && l.status == "DONE" } >= 3) 1f else 0f,
                 targetProgress = 1f,
-                progressText = if (focusSkips == 0) "Nenhum foco pulado" else "$focusSkips pulados"
+                progressText = run {
+                    val done = weeklyLogs.count { l -> focusHabits.any { it.id == l.habitId } && l.status == "DONE" }
+                    if (done == 0 && focusSkips == 0) "Nenhum bloco registrado"
+                    else if (focusSkips == 0) "$done concluídos (0 pulados)"
+                    else "$focusSkips pulados"
+                }
             ),
             WeeklyMedal(
                 id = "guerreiro_anti_cochilo",
                 title = "Vigília Ativa",
                 category = "disciplina",
                 icon = "🛡️",
-                unlocked = noNapDoneCount >= 5 || napCount <= 1,
+                unlocked = run {
+                    val recordedNapDays = dates.count { d -> napLogs.any { it.date == d } }
+                    val hasTracking = recordedNapDays >= 5 || noNapDoneCount >= 5
+                    hasTracking && (noNapDoneCount >= 5 || (recordedNapDays >= 5 && napCount <= 1))
+                },
                 description = "Preservou a pressão homeostática de sono sem cochilos excessivos.",
-                requirement = "Sem cochilo diurno em ≥ 5 dias",
-                currentProgress = minOf(5f, maxOf(noNapDoneCount.toFloat(), (7 - napCount).toFloat())),
+                requirement = "Sem cochilo diurno em ≥ 5 dias registrados",
+                currentProgress = run {
+                    val recordedNapDays = dates.count { d -> napLogs.any { it.date == d } }
+                    minOf(5f, maxOf(noNapDoneCount.toFloat(), (recordedNapDays - napCount).coerceAtLeast(0).toFloat()))
+                },
                 targetProgress = 5f,
-                progressText = "${minOf(5, maxOf(noNapDoneCount, 7 - napCount))} de 5 dias"
+                progressText = run {
+                    val recordedNapDays = dates.count { d -> napLogs.any { it.date == d } }
+                    val hasTracking = recordedNapDays >= 5 || noNapDoneCount >= 5
+                    if (!hasTracking) "Sem registros suficientes (mín. 5 dias)"
+                    else "${minOf(5, maxOf(noNapDoneCount, recordedNapDays - napCount))} de 5 dias sem cochilo"
+                }
             ),
             WeeklyMedal(
                 id = "diario_sagrado",

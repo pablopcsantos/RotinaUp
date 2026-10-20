@@ -8,7 +8,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Backspace
+import androidx.compose.material.icons.automirrored.filled.Backspace
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.*
@@ -28,7 +28,7 @@ import kotlinx.coroutines.delay
 
 @Composable
 fun AuthPinLockScreen(
-    onVerifyPin: (String) -> Boolean,
+    onVerifyPin: (entered: String, recordFailure: Boolean) -> Boolean,
     onSuccess: () -> Unit
 ) {
     val context = LocalContext.current
@@ -37,11 +37,14 @@ fun AuthPinLockScreen(
     var failedAttempts by remember { mutableStateOf(SecurityUtils.getFailedAttempts(context)) }
     var lockoutSeconds by remember { mutableStateOf(SecurityUtils.getLockoutRemainingSeconds(context)) }
 
-    // Persistent rate limiting countdown timer
-    LaunchedEffect(lockoutSeconds) {
-        while (lockoutSeconds > 0) {
+    // Persistent rate limiting countdown timer (polls every second safely)
+    LaunchedEffect(Unit) {
+        while (true) {
+            val remaining = SecurityUtils.getLockoutRemainingSeconds(context)
+            if (lockoutSeconds != remaining) {
+                lockoutSeconds = remaining
+            }
             delay(1000)
-            lockoutSeconds = SecurityUtils.getLockoutRemainingSeconds(context)
         }
     }
 
@@ -51,7 +54,7 @@ fun AuthPinLockScreen(
             lockoutSeconds = currentLockout
             return
         }
-        val isValid = onVerifyPin(entered)
+        val isValid = onVerifyPin(entered, true)
         if (isValid) {
             onSuccess()
         } else {
@@ -72,11 +75,11 @@ fun AuthPinLockScreen(
             val next = pin + d
             pin = next
             isError = false
-            // Check if matches immediately (e.g. 4-digit PIN)
-            if (onVerifyPin(next)) {
+            // If user typed 4+ digits, check if valid without recording a failure (they may be typing 5-6 digits)
+            if (next.length >= 4 && onVerifyPin(next, false)) {
                 onSuccess()
             } else if (next.length == 6) {
-                // Reached max length, verify and flag error if wrong
+                // Reached max length, verify with failure recording
                 submitPin(next)
             }
         }
@@ -233,7 +236,7 @@ fun AuthPinLockScreen(
                                 ) {
                                     Box(contentAlignment = Alignment.Center) {
                                         Icon(
-                                            Icons.Default.Backspace,
+                                            Icons.AutoMirrored.Filled.Backspace,
                                             contentDescription = "Apagar",
                                             modifier = Modifier.size(22.dp)
                                         )

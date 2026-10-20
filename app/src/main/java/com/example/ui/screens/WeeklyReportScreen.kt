@@ -12,6 +12,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -525,7 +526,7 @@ fun WeeklyReportScreen(
                                 Text("Média de Sono", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Icon(Icons.Default.TrendingUp, contentDescription = null, tint = StatusPartial, modifier = Modifier.size(24.dp))
+                                Icon(Icons.AutoMirrored.Filled.TrendingUp, contentDescription = null, tint = StatusPartial, modifier = Modifier.size(24.dp))
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(if (report.bedtimeVariationHours != null) "±${report.bedtimeVariationHours}h" else "--", fontWeight = FontWeight.Black, fontSize = 16.sp)
                                 Text("Variação Deitar", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)

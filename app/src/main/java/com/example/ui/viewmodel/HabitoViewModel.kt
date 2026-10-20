@@ -8,8 +8,12 @@ import com.example.data.model.HabitLog
 import com.example.data.model.Habito
 import com.example.data.repository.HabitoRepository
 import com.example.util.DateUtils
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -18,7 +22,17 @@ class HabitoViewModel(
 ) : AndroidViewModel(application) {
     private val repository: HabitoRepository = HabitoRepository(AppDatabase.getDatabase(application).habitDao())
 
-    val todayDateStr: String = DateUtils.getTodayDateString(0)
+    private val _currentDateStr = MutableStateFlow(DateUtils.getTodayDateString(0))
+    val currentDateStr: StateFlow<String> = _currentDateStr.asStateFlow()
+
+    val todayDateStr: String get() = _currentDateStr.value
+
+    fun updateCurrentDate() {
+        val today = DateUtils.getTodayDateString(0)
+        if (_currentDateStr.value != today) {
+            _currentDateStr.value = today
+        }
+    }
 
     val allHabits: StateFlow<List<Habito>> = repository.allHabits
         .stateIn(
@@ -34,7 +48,9 @@ class HabitoViewModel(
             initialValue = emptyList()
         )
 
-    val todayLogs: StateFlow<List<HabitLog>> = repository.getLogsForDate(todayDateStr)
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val todayLogs: StateFlow<List<HabitLog>> = _currentDateStr
+        .flatMapLatest { date -> repository.getLogsForDate(date) }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),

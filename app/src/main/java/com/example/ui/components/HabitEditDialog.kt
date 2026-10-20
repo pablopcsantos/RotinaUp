@@ -178,7 +178,7 @@ fun HabitEditDialog(
                         shape = RoundedCornerShape(14.dp),
                         colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
                         modifier = Modifier
-                            .menuAnchor()
+                            .menuAnchor(MenuAnchorType.PrimaryNotEditable)
                             .fillMaxWidth()
                     )
 

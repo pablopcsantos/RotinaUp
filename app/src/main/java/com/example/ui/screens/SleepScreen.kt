@@ -440,7 +440,7 @@ fun SleepScreen(
 
                                 if (hasNap) {
                                     Spacer(modifier = Modifier.height(16.dp))
-                                    Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+                                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
                                     Spacer(modifier = Modifier.height(14.dp))
 
                                     Row(

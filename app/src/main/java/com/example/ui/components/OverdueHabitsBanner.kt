@@ -6,8 +6,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Alarm
-import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Timer
@@ -183,7 +183,7 @@ fun OverdueHabitsBanner(
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Icon(
-                        Icons.Default.ArrowForward,
+                        Icons.AutoMirrored.Filled.ArrowForward,
                         contentDescription = null,
                         modifier = Modifier.size(14.dp),
                         tint = StatusPartial

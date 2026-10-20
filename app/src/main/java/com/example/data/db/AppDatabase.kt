@@ -19,7 +19,7 @@ import com.example.data.model.*
         AlarmEvent::class
     ],
     version = 7,
-    exportSchema = false
+    exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun habitDao(): HabitoDao

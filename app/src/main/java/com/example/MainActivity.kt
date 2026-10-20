@@ -11,6 +11,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -76,6 +77,11 @@ class MainActivity : ComponentActivity() {
             viewModel.snoozeOverdue(5)
         }
     }
+
+    override fun onResume() {
+        super.onResume()
+        viewModel.updateCurrentTime()
+    }
 }
 
 @Composable
@@ -119,11 +125,13 @@ fun RotinaUpApp(
     var showWidgetPreview by remember { mutableStateOf(false) }
 
     // Overdue Habit Alert triggering logic (Requirement 7)
-    val todayIsoDay = remember(viewModel.todayDateStr) { DateUtils.getIsoDayOfWeek(viewModel.todayDateStr) }
+    val currentDateStr by viewModel.currentDateStr.collectAsState()
+    val todayIsoDay = remember(currentDateStr) { DateUtils.getIsoDayOfWeek(currentDateStr) }
     val todayLogsMap = remember(todayLogsList) { todayLogsList.associateBy { it.habitId } }
+    val isUnlocked = authState is com.example.ui.viewmodel.AuthState.Unlocked
 
-    val overdueHabitForAlarm = remember(isDataSettled, activeHabitsList, todayLogsMap, currentTimeStr, settings.overdueRemindersEnabled, snoozeUntil, isFromWidget) {
-        if (!isDataSettled || isFromWidget || !settings.overdueRemindersEnabled || System.currentTimeMillis() < snoozeUntil) null
+    val overdueHabitForAlarm = remember(isUnlocked, isDataSettled, activeHabitsList, todayLogsMap, currentTimeStr, settings.overdueRemindersEnabled, snoozeUntil, isFromWidget) {
+        if (!isUnlocked || !isDataSettled || isFromWidget || !settings.overdueRemindersEnabled || System.currentTimeMillis() < snoozeUntil) null
         else {
             activeHabitsList.firstOrNull { h ->
                 val isToday = h.isScheduledOn(todayIsoDay)
@@ -136,6 +144,7 @@ fun RotinaUpApp(
 
     // Overdue Mandatory Steps Alarm triggering logic
     val isMandatoryOverdueForAlarm = remember(
+        isUnlocked,
         isDataSettled,
         isFromWidget,
         todaySleepLog,
@@ -145,7 +154,7 @@ fun RotinaUpApp(
         settings.mandatoryDeadlineTime,
         mandatorySnoozeUntil
     ) {
-        if (!isDataSettled || isFromWidget || !settings.mandatoryRemindersEnabled || System.currentTimeMillis() < mandatorySnoozeUntil) {
+        if (!isUnlocked || !isDataSettled || isFromWidget || !settings.mandatoryRemindersEnabled || System.currentTimeMillis() < mandatorySnoozeUntil) {
             false
         } else {
             val pending = (todaySleepLog == null) || (todayDailyReview == null)
@@ -185,7 +194,7 @@ fun RotinaUpApp(
     // 1. PIN Lock Screen: Must verify before granting access
     if (authState is com.example.ui.viewmodel.AuthState.Locked) {
         AuthPinLockScreen(
-            onVerifyPin = { entered -> viewModel.verifyPin(entered) },
+            onVerifyPin = { entered, recordFailure -> viewModel.verifyPin(entered, recordFailure) },
             onSuccess = { viewModel.unlockSession() }
         )
         return
@@ -444,7 +453,7 @@ fun RotinaUpApp(
                             navController.navigate("habits")
                         }
                     },
-                    icon = { Icon(Icons.Default.List, contentDescription = "Hábitos") },
+                    icon = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = "Hábitos") },
                     label = { Text("Hábitos", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
                 )
 
