@@ -46,6 +46,8 @@ fun AlarmDismissModal(
     var typedText by remember { mutableStateOf("") }
     var attempts by remember { mutableIntStateOf(1) }
 
+    var showMismatchError by remember { mutableStateOf(false) }
+
     val targetPhrase = habit.dismissPhrase.ifBlank { "eu assumo o compromisso" }
     val isMatch = remember(typedText, targetPhrase) {
         TextNormalizer.isPhraseMatch(typedText, targetPhrase)
@@ -174,7 +176,10 @@ fun AlarmDismissModal(
                     // Input
                     OutlinedTextField(
                         value = typedText,
-                        onValueChange = { typedText = it },
+                        onValueChange = {
+                            typedText = it
+                            showMismatchError = false
+                        },
                         placeholder = { Text(targetPhrase) },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
@@ -201,6 +206,15 @@ fun AlarmDismissModal(
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold
                             )
+                        } else if (showMismatchError) {
+                            Icon(Icons.Default.Warning, contentDescription = null, tint = StatusSkipped, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Frase incorreta (${attempts}ª tentativa). Digite exatamente.",
+                                color = StatusSkipped,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
                         } else {
                             Icon(Icons.Default.Warning, contentDescription = null, tint = StatusPartial, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
@@ -224,12 +238,13 @@ fun AlarmDismissModal(
                                 onDismiss(typedText, attempts)
                             } else {
                                 attempts++
+                                showMismatchError = true
                             }
                         },
-                        enabled = isMatch,
+                        enabled = typedText.isNotBlank(),
                         shape = RoundedCornerShape(16.dp),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = StatusDone,
+                            containerColor = if (isMatch) StatusDone else MaterialTheme.colorScheme.primary,
                             disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant
                         ),
                         modifier = Modifier
@@ -237,7 +252,7 @@ fun AlarmDismissModal(
                             .height(50.dp)
                     ) {
                         Text(
-                            text = if (isMatch) "DESLIGAR ALARME E FAZER" else "AGUARDANDO DIGITAÇÃO...",
+                            text = if (isMatch) "DESLIGAR ALARME E FAZER" else "VALIDAR E DESLIGAR",
                             fontWeight = FontWeight.Black,
                             fontSize = 13.sp
                         )

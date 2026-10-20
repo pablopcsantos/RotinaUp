@@ -73,6 +73,7 @@ class MainActivity : ComponentActivity() {
 
     private fun handleWidgetIntent(intent: android.content.Intent?) {
         if (intent?.getBooleanExtra("from_widget", false) == true) {
+            intent.removeExtra("from_widget")
             // Opened via home screen widget: snooze popups so user lands cleanly on the today view
             viewModel.snoozeOverdue(5)
         }
@@ -86,6 +87,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
+        viewModel.lockIfTimeoutExceeded(30_000L)
         val filter = android.content.IntentFilter().apply {
             addAction(android.content.Intent.ACTION_DATE_CHANGED)
             addAction(android.content.Intent.ACTION_TIME_TICK)
@@ -97,11 +99,13 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        viewModel.lockIfTimeoutExceeded(30_000L)
         viewModel.updateCurrentTime()
     }
 
     override fun onStop() {
         super.onStop()
+        viewModel.onBackgrounded()
         try {
             unregisterReceiver(timeTickReceiver)
         } catch (_: Exception) {}
@@ -140,7 +144,41 @@ fun RotinaUpApp(
         isDataSettled = true
     }
 
-    val isFromWidget = remember(intent) { intent?.getBooleanExtra("from_widget", false) == true }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val activity = context as? android.app.Activity
+
+    // Secure window against screenshots and app switcher previews while locked
+    LaunchedEffect(authState) {
+        if (authState is com.example.ui.viewmodel.AuthState.Locked) {
+            activity?.window?.setFlags(
+                android.view.WindowManager.LayoutParams.FLAG_SECURE,
+                android.view.WindowManager.LayoutParams.FLAG_SECURE
+            )
+        } else {
+            activity?.window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+        }
+    }
+
+    // Runtime POST_NOTIFICATIONS permission for Android 13+ (API 33+)
+    val notificationPermissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (!isGranted) {
+            viewModel.showToast("Notificações desativadas. Ative em Configurações para receber lembretes.")
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            if (androidx.core.content.ContextCompat.checkSelfPermission(
+                    context,
+                    android.Manifest.permission.POST_NOTIFICATIONS
+                ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+            ) {
+                notificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+    }
 
     // Dialog & overlay states
     var activeFocusHabit by remember { mutableStateOf<Habito?>(null) }
@@ -154,8 +192,8 @@ fun RotinaUpApp(
     val todayLogsMap = remember(todayLogsList) { todayLogsList.associateBy { it.habitId } }
     val isUnlocked = authState is com.example.ui.viewmodel.AuthState.Unlocked
 
-    val overdueHabitForAlarm = remember(isUnlocked, isDataSettled, activeHabitsList, todayLogsMap, currentTimeStr, settings.overdueRemindersEnabled, snoozeUntil, isFromWidget) {
-        if (!isUnlocked || !isDataSettled || isFromWidget || !settings.overdueRemindersEnabled || System.currentTimeMillis() < snoozeUntil) null
+    val overdueHabitForAlarm = remember(isUnlocked, isDataSettled, activeHabitsList, todayLogsMap, currentTimeStr, settings.overdueRemindersEnabled, snoozeUntil) {
+        if (!isUnlocked || !isDataSettled || !settings.overdueRemindersEnabled || System.currentTimeMillis() < snoozeUntil) null
         else {
             activeHabitsList.firstOrNull { h ->
                 val isToday = h.isScheduledOn(todayIsoDay)
@@ -170,7 +208,6 @@ fun RotinaUpApp(
     val isMandatoryOverdueForAlarm = remember(
         isUnlocked,
         isDataSettled,
-        isFromWidget,
         todaySleepLog,
         todayDailyReview,
         currentTimeStr,
@@ -178,7 +215,7 @@ fun RotinaUpApp(
         settings.mandatoryDeadlineTime,
         mandatorySnoozeUntil
     ) {
-        if (!isUnlocked || !isDataSettled || isFromWidget || !settings.mandatoryRemindersEnabled || System.currentTimeMillis() < mandatorySnoozeUntil) {
+        if (!isUnlocked || !isDataSettled || !settings.mandatoryRemindersEnabled || System.currentTimeMillis() < mandatorySnoozeUntil) {
             false
         } else {
             val pending = (todaySleepLog == null) || (todayDailyReview == null)
@@ -218,7 +255,7 @@ fun RotinaUpApp(
     // 1. PIN Lock Screen: Must verify before granting access
     if (authState is com.example.ui.viewmodel.AuthState.Locked) {
         AuthPinLockScreen(
-            onVerifyPin = { entered, recordFailure -> viewModel.verifyPin(entered, recordFailure) },
+            onVerifyPin = { entered -> viewModel.verifyPin(entered) },
             onSuccess = { viewModel.unlockSession() }
         )
         return
@@ -302,11 +339,11 @@ fun RotinaUpApp(
     }
 
     // 5. Consequence Modal
-    consequence?.let { (habitName, msg) ->
+    consequence?.let { event ->
         ConsequenceDialog(
-            habitName = habitName,
-            message = msg,
-            isSuccess = !msg.contains("Pular", ignoreCase = true) && !msg.contains("atrasa", ignoreCase = true) && !msg.contains("prejudica", ignoreCase = true) && !msg.contains("sedentarismo", ignoreCase = true),
+            habitName = event.habitName,
+            message = event.message,
+            isSuccess = event.isPositive,
             onDismiss = { viewModel.clearConsequence() }
         )
     }
@@ -342,8 +379,8 @@ fun RotinaUpApp(
         )
     }
 
-    // 8. Dummy Content Notice (First Launch - only after data has settled and not when launched from widget)
-    if (isDataSettled && !isFromWidget && settings.isDummyActive && !settings.hasSeenDummyPrompt) {
+    // 8. Dummy Content Notice (First Launch - only after data has settled)
+    if (isDataSettled && settings.isDummyActive && !settings.hasSeenDummyPrompt) {
         DummyContentDialog(
             onDismiss = { viewModel.dismissDummyPrompt() },
             onClearImmediately = { viewModel.clearDummyContent() }

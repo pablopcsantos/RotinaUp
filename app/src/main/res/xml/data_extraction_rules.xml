@@ -1,13 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <data-extraction-rules>
     <cloud-backup>
-        <!-- Include local database -->
+        <!-- Include local database files (main + WAL + SHM) -->
         <include domain="database" path="rotinaup.db" />
+        <include domain="database" path="rotinaup.db-wal" />
+        <include domain="database" path="rotinaup.db-shm" />
         <!-- Exclude lockout counters and security prefs -->
         <exclude domain="sharedpref" path="rotinaup_security_prefs.xml" />
     </cloud-backup>
     <device-transfer>
         <include domain="database" path="rotinaup.db" />
+        <include domain="database" path="rotinaup.db-wal" />
+        <include domain="database" path="rotinaup.db-shm" />
         <exclude domain="sharedpref" path="rotinaup_security_prefs.xml" />
     </device-transfer>
 </data-extraction-rules>

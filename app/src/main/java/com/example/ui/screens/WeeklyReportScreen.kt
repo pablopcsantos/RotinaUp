@@ -46,13 +46,15 @@ fun WeeklyReportScreen(
     val napLogs by viewModel.allNapLogs.collectAsState()
     val dailyReviews by viewModel.allDailyReviews.collectAsState()
 
+    val currentDateStr by viewModel.currentDateStr.collectAsState()
+
     var medalFilter by remember { mutableStateOf("ALL") } // ALL, UNLOCKED, LOCKED
 
-    val report = remember(habits, allLogs, sleepLogs, napLogs, dailyReviews) {
+    val report = remember(habits, allLogs, sleepLogs, napLogs, dailyReviews, currentDateStr) {
         viewModel.computeWeeklyReport(habits, allLogs, sleepLogs, napLogs, dailyReviews)
     }
 
-    val periodStr = remember {
+    val periodStr = remember(currentDateStr) {
         val start = DateUtils.getTodayDateString(-6)
         val end = DateUtils.getTodayDateString(0)
         "${DateUtils.formatFriendlyDate(start)} até ${DateUtils.formatFriendlyDate(end)}"
@@ -60,7 +62,13 @@ fun WeeklyReportScreen(
 
     fun copyToClipboard(label: String, text: String) {
         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        val clip = ClipData.newPlainText(label, text)
+        val clip = ClipData.newPlainText(label, text).apply {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                description.extras = android.os.PersistableBundle().apply {
+                    putBoolean(android.content.ClipDescription.EXTRA_IS_SENSITIVE, true)
+                }
+            }
+        }
         clipboard.setPrimaryClip(clip)
         viewModel.showToast("$label copiado para a área de transferência!")
     }

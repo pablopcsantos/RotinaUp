@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <full-backup-content>
-    <!-- Include local Room SQLite database for offline routine preservation -->
+    <!-- Include local Room SQLite database files (main + WAL + SHM) for offline routine preservation -->
     <include domain="database" path="rotinaup.db" />
+    <include domain="database" path="rotinaup.db-wal" />
+    <include domain="database" path="rotinaup.db-shm" />
     <!-- Exclude security preferences (lockout counters and timestamps) -->
     <exclude domain="sharedpref" path="rotinaup_security_prefs.xml" />
 </full-backup-content>

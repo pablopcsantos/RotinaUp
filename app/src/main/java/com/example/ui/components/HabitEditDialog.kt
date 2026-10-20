@@ -75,6 +75,17 @@ fun HabitEditDialog(
     var showInWidget by remember { mutableStateOf(habitToEdit?.showInWidget ?: true) }
 
     var nameError by remember { mutableStateOf(false) }
+    var timeError by remember { mutableStateOf(false) }
+
+    fun parseAndFormatTime(input: String): String? {
+        val clean = input.trim()
+        val parts = clean.split(":")
+        if (parts.size != 2) return null
+        val h = parts[0].toIntOrNull() ?: return null
+        val m = parts[1].toIntOrNull() ?: return null
+        if (h !in 0..23 || m !in 0..59) return null
+        return "%02d:%02d".format(h, m)
+    }
 
     fun updateDefaultPhrase(newType: String) {
         if (habitToEdit == null || dismissPhrase.isBlank()) {
@@ -239,8 +250,13 @@ fun HabitEditDialog(
                 ) {
                     OutlinedTextField(
                         value = targetTime,
-                        onValueChange = { targetTime = it },
+                        onValueChange = {
+                            targetTime = it
+                            timeError = false
+                        },
                         label = { Text("Horário (HH:mm) *") },
+                        isError = timeError,
+                        supportingText = if (timeError) { { Text("Formato inválido (HH:mm)") } } else null,
                         singleLine = true,
                         shape = RoundedCornerShape(14.dp),
                         modifier = Modifier.weight(1f)
@@ -410,12 +426,18 @@ fun HabitEditDialog(
                             nameError = true
                             return@Button
                         }
+                        val formattedTime = parseAndFormatTime(targetTime)
+                        if (formattedTime == null) {
+                            timeError = true
+                            return@Button
+                        }
+                        val cleanDuration = durationText.toIntOrNull()?.coerceIn(0, 1440) ?: 30
                         val habit = Habit(
                             id = habitToEdit?.id ?: 0L,
                             name = name.trim(),
                             type = type,
-                            targetTime = targetTime.trim().ifBlank { "08:00" },
-                            durationMinutes = durationText.toIntOrNull() ?: 30,
+                            targetTime = formattedTime,
+                            durationMinutes = cleanDuration,
                             daysOfWeek = selectedDays.sorted().joinToString(","),
                             priority = priority,
                             isActive = habitToEdit?.isActive ?: true,

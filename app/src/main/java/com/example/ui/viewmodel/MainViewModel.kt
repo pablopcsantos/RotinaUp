@@ -391,6 +391,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun verifyPin(enteredPin: String, recordFailure: Boolean = true): Boolean {
+        if (com.example.util.SecurityUtils.getLockoutRemainingSeconds(getApplication()) > 0) {
+            return false
+        }
         val current = userSettings.value
         val isValid = com.example.util.SecurityUtils.verifyPin(enteredPin, current)
         if (isValid) {
@@ -988,7 +991,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         sleepDao.insertAllSleepLogs(dummySleep)
         sleepDao.insertAllNapLogs(dummyNaps)
         sleepDao.insertAllDailyReviews(dummyReviews)
-        settingsDao.insertOrUpdateSettings(UserSettings(isDummyActive = true, hasSeenDummyPrompt = false))
+        settingsDao.insertOrUpdateSettings(UserSettings(isDummyActive = true, hasSeenDummyPrompt = false, hasSeededInitialData = true))
         com.example.widget.RotinaUpWidgetProvider.updateAllWidgets(getApplication())
     }
 
