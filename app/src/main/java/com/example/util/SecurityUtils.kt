@@ -15,6 +15,8 @@ object SecurityUtils {
     private const val PREFS_NAME = "rotinaup_security_prefs"
     private const val PREF_FAILED_ATTEMPTS = "failed_pin_attempts"
     private const val PREF_LOCKOUT_UNTIL = "pin_lockout_until_ms"
+    private const val PREF_LOCKOUT_ELAPSED_UNTIL = "pin_lockout_elapsed_until_ms"
+    private const val PREF_LOCKOUT_WALL_UNTIL = "pin_lockout_wall_until_ms"
 
     /**
      * Generates a 16-byte cryptographically secure random salt in hex format.
@@ -112,14 +114,16 @@ object SecurityUtils {
 
     fun getLockoutRemainingSeconds(context: Context): Int {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val lockoutUntil = prefs.getLong(PREF_LOCKOUT_UNTIL, 0L)
-        val now = System.currentTimeMillis()
-        return if (lockoutUntil > now) {
-            val seconds = ((lockoutUntil - now) + 999) / 1000
-            seconds.toInt()
-        } else {
-            0
-        }
+        val elapsedUntil = prefs.getLong(PREF_LOCKOUT_ELAPSED_UNTIL, 0L)
+        val wallUntil = prefs.getLong(PREF_LOCKOUT_WALL_UNTIL, prefs.getLong(PREF_LOCKOUT_UNTIL, 0L))
+
+        val nowElapsed = android.os.SystemClock.elapsedRealtime()
+        val nowWall = System.currentTimeMillis()
+
+        val elapsedRemaining = if (elapsedUntil > nowElapsed) ((elapsedUntil - nowElapsed) + 999) / 1000 else 0
+        val wallRemaining = if (wallUntil > nowWall) ((wallUntil - nowWall) + 999) / 1000 else 0
+
+        return maxOf(elapsedRemaining.toInt(), wallRemaining.toInt()).coerceAtLeast(0)
     }
 
     fun recordFailedAttempt(context: Context): Int {
@@ -129,12 +133,18 @@ object SecurityUtils {
 
         var lockoutSec = 0
         if (currentFailed >= 3) {
-            // 15 seconds for 3 attempts; 30 seconds for 4+ attempts
-            lockoutSec = if (currentFailed == 3) 15 else 30
-            val lockoutUntil = System.currentTimeMillis() + (lockoutSec * 1000L)
-            editor.putLong(PREF_LOCKOUT_UNTIL, lockoutUntil)
+            lockoutSec = when (currentFailed) {
+                3 -> 15
+                4 -> 30
+                5 -> 60
+                else -> 300
+            }
+            val elapsedUntil = android.os.SystemClock.elapsedRealtime() + (lockoutSec * 1000L)
+            val wallUntil = System.currentTimeMillis() + (lockoutSec * 1000L)
+            editor.putLong(PREF_LOCKOUT_ELAPSED_UNTIL, elapsedUntil)
+            editor.putLong(PREF_LOCKOUT_WALL_UNTIL, wallUntil)
         }
-        editor.apply()
+        editor.commit()
         return lockoutSec
     }
 
@@ -142,7 +152,9 @@ object SecurityUtils {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         prefs.edit()
             .putInt(PREF_FAILED_ATTEMPTS, 0)
-            .putLong(PREF_LOCKOUT_UNTIL, 0L)
-            .apply()
+            .remove(PREF_LOCKOUT_ELAPSED_UNTIL)
+            .remove(PREF_LOCKOUT_WALL_UNTIL)
+            .remove(PREF_LOCKOUT_UNTIL)
+            .commit()
     }
 }

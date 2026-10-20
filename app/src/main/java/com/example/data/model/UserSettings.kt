@@ -21,7 +21,7 @@ data class UserSettings(
     val overdueIntervalMinutes: Int = 15,
     val overdueAlarmSound: Boolean = true,
     val isDummyActive: Boolean = true,
-    val hasSeenDummyPrompt: Boolean = true,
+    val hasSeenDummyPrompt: Boolean = false,
     // Customizable Habit Types Names (Requirement 6)
     val typeSleepName: String = "Sono",
     val typeFocusName: String = "Foco",

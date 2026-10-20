@@ -990,11 +990,11 @@ fun SettingsScreen(
             title = { Text("Definir PIN de Proteção") },
             text = {
                 Column {
-                    Text("Insira de 4 a 6 dígitos numéricos:", fontSize = 12.sp)
+                    Text("Insira 4 dígitos numéricos:", fontSize = 12.sp)
                     Spacer(modifier = Modifier.height(8.dp))
                     OutlinedTextField(
                         value = tempPin,
-                        onValueChange = { tempPin = it.filter { char -> char.isDigit() }.take(6) },
+                        onValueChange = { tempPin = it.filter { char -> char.isDigit() }.take(4) },
                         placeholder = { Text("Ex: 1234") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
@@ -1004,14 +1004,14 @@ fun SettingsScreen(
             confirmButton = {
                 Button(
                     onClick = {
-                        if (tempPin.length >= 4) {
+                        if (tempPin.length == 4) {
                             viewModel.setPin(tempPin)
                             viewModel.showToast("PIN configurado com segurança!")
                             showPinDialog = false
                             tempPin = ""
                         }
                     },
-                    enabled = tempPin.length >= 4
+                    enabled = tempPin.length == 4
                 ) {
                     Text("Salvar PIN")
                 }

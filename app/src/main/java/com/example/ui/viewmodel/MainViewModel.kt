@@ -100,6 +100,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun unlockSession() {
         _isSessionUnlocked.value = true
+        lastBackgroundedTime = 0L
+    }
+
+    private var lastBackgroundedTime = 0L
+
+    fun onBackgrounded() {
+        lastBackgroundedTime = android.os.SystemClock.elapsedRealtime()
+    }
+
+    fun lockIfTimeoutExceeded(timeoutMs: Long = 30_000L) {
+        if (lastBackgroundedTime > 0L && (android.os.SystemClock.elapsedRealtime() - lastBackgroundedTime) >= timeoutMs) {
+            lockSession()
+        }
+    }
+
+    fun lockSession() {
+        _isSessionUnlocked.value = false
+        lastBackgroundedTime = 0L
     }
 
     // Snooze until timestamp for overdue reminder
@@ -115,16 +133,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val toastMessage: StateFlow<String?> = _toastMessage.asStateFlow()
 
     // Consequence dialog state (positive or reflection)
-    private val _consequence = MutableStateFlow<Pair<String, String>?>(null)
-    val consequence: StateFlow<Pair<String, String>?> = _consequence.asStateFlow()
+    private val _consequence = MutableStateFlow<com.example.data.model.ConsequenceEvent?>(null)
+    val consequence: StateFlow<com.example.data.model.ConsequenceEvent?> = _consequence.asStateFlow()
 
     init {
         viewModelScope.launch {
             val current = settingsDao.getSettings().firstOrNull()
             if (current == null || !current.hasSeededInitialData) {
                 seedInitialData()
-                val updated = (current ?: UserSettings()).copy(hasSeededInitialData = true)
-                settingsDao.insertOrUpdateSettings(updated)
             } else if (!current.pinCode.isNullOrBlank()) {
                 // Auto-migrate any legacy plain-text PIN immediately to salted PBKDF2 hash
                 val upgraded = com.example.util.SecurityUtils.createHashedSettings(current.pinCode, current)
@@ -190,9 +206,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             )
             if (habit != null) {
                 if (status == "DONE" && habit.positiveConsequence.isNotBlank()) {
-                    _consequence.value = Pair(habit.name, habit.positiveConsequence)
+                    _consequence.value = com.example.data.model.ConsequenceEvent(habit.name, habit.positiveConsequence, isPositive = true)
                 } else if (status == "SKIPPED" && habit.negativeConsequence.isNotBlank()) {
-                    _consequence.value = Pair(habit.name, habit.negativeConsequence)
+                    _consequence.value = com.example.data.model.ConsequenceEvent(habit.name, habit.negativeConsequence, isPositive = false)
                 } else {
                     val msg = when (status) {
                         "DONE" -> "Hábito concluído com sucesso!"
@@ -227,6 +243,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             habitoRepository.deleteHabit(habit)
             com.example.util.AlarmScheduler.cancelHabitReminder(getApplication(), habit.id)
+            androidx.core.app.NotificationManagerCompat.from(getApplication()).cancel(habit.id.toInt())
             showToast("Hábito excluído.")
             com.example.widget.RotinaUpWidgetProvider.updateAllWidgets(getApplication())
         }
@@ -240,6 +257,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 com.example.util.AlarmScheduler.scheduleHabitReminder(getApplication(), updated)
             } else {
                 com.example.util.AlarmScheduler.cancelHabitReminder(getApplication(), updated.id)
+                androidx.core.app.NotificationManagerCompat.from(getApplication()).cancel(updated.id.toInt())
             }
             showToast("Hábito ${if (updated.isActive) "ativado" else "desativado"}")
             com.example.widget.RotinaUpWidgetProvider.updateAllWidgets(getApplication())
@@ -255,7 +273,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
             com.example.widget.RotinaUpWidgetProvider.updateAllWidgets(getApplication())
-            showToast("Todos os hábitos foram ativados no widget!")
+            showToast(if (show) "Todos os hábitos foram ativados no widget!" else "Todos os hábitos foram ocultados do widget!")
         }
     }
 
@@ -268,21 +286,36 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     ) {
         viewModelScope.launch {
             var diff = 480
+            var validBed = bedtimeStr.trim()
+            var validWake = wakeTimeStr.trim()
             try {
-                val (bH, bM) = bedtimeStr.split(":").map { it.toInt() }
-                val (wH, wM) = wakeTimeStr.split(":").map { it.toInt() }
-                var m = (wH * 60 + wM) - (bH * 60 + bM)
-                if (m <= 0) m += 24 * 60
-                diff = m
+                val bParts = validBed.split(":").map { it.toInt() }
+                val wParts = validWake.split(":").map { it.toInt() }
+                val bH = bParts[0].coerceIn(0, 23)
+                val bM = bParts[1].coerceIn(0, 59)
+                val wH = wParts[0].coerceIn(0, 23)
+                val wM = wParts[1].coerceIn(0, 59)
+                validBed = "%02d:%02d".format(bH, bM)
+                validWake = "%02d:%02d".format(wH, wM)
+
+                val bTotal = bH * 60 + bM
+                val wTotal = wH * 60 + wM
+                var m = wTotal - bTotal
+                if (m < 0) {
+                    m += 24 * 60
+                } else if (m == 0) {
+                    m = 0
+                }
+                diff = if (m in 1..(16 * 60)) m else 480
             } catch (_: Exception) {}
 
             sleepDao.insertSleepLog(
                 SleepLog(
                     date = todayDateStr,
-                    bedtimeStr = bedtimeStr,
-                    wakeTimeStr = wakeTimeStr,
+                    bedtimeStr = validBed,
+                    wakeTimeStr = validWake,
                     durationMinutes = diff,
-                    quality = quality,
+                    quality = quality.coerceIn(1, 5),
                     awakenings = awakenings,
                     awakeningsUnnoticed = awakenings == -1,
                     note = note?.trim()?.ifBlank { null }
@@ -299,12 +332,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         note: String?
     ) {
         viewModelScope.launch {
+            var validTime = napTime.trim()
+            try {
+                val parts = validTime.split(":").map { it.toInt() }
+                validTime = "%02d:%02d".format(parts[0].coerceIn(0, 23), parts[1].coerceIn(0, 59))
+            } catch (_: Exception) {
+                validTime = "14:00"
+            }
             sleepDao.insertNapLog(
                 NapLog(
                     date = todayDateStr,
                     hasNap = hasNap,
-                    napTime = napTime,
-                    napMinutes = if (hasNap) napMinutes else 0,
+                    napTime = validTime,
+                    napMinutes = if (hasNap) napMinutes.coerceIn(1, 240) else 0,
                     note = note?.trim()?.ifBlank { null }
                 )
             )

@@ -17,7 +17,7 @@ object TextNormalizer {
         val withoutAccents = normalized.replace("\\p{InCombiningDiacriticalMarks}+".toRegex(), "")
         return withoutAccents
             .lowercase(Locale.ROOT)
-            .replace("[^a-z0-9\\s]".toRegex(), "")
+            .replace("[^\\p{L}\\p{N}\\s]".toRegex(), "")
             .replace("\\s+".toRegex(), " ")
             .trim()
     }
@@ -25,7 +25,7 @@ object TextNormalizer {
     fun isPhraseMatch(typed: String?, target: String?): Boolean {
         val normTyped = normalize(typed)
         val normTarget = normalize(target)
-        if (normTarget.isEmpty()) return true
+        if (normTarget.isEmpty()) return false
         return normTyped == normTarget
     }
 }

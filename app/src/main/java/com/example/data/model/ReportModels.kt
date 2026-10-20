@@ -38,7 +38,14 @@ data class HabitWeeklyMatrix(
     val habit: Habit,
     val rate: Int,
     val days: List<HabitWeeklyDayStatus>,
-    val completedDaysCount: Int
+    val completedDaysCount: Int,
+    val scheduledDaysCount: Int = 7
+)
+
+data class ConsequenceEvent(
+    val habitName: String,
+    val message: String,
+    val isPositive: Boolean
 )
 
 data class WeeklyReportData(

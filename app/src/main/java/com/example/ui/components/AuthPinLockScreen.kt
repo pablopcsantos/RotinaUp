@@ -28,7 +28,8 @@ import kotlinx.coroutines.delay
 
 @Composable
 fun AuthPinLockScreen(
-    onVerifyPin: (entered: String, recordFailure: Boolean) -> Boolean,
+    pinLength: Int = 4,
+    onVerifyPin: (entered: String) -> Boolean,
     onSuccess: () -> Unit
 ) {
     val context = LocalContext.current
@@ -54,7 +55,7 @@ fun AuthPinLockScreen(
             lockoutSeconds = currentLockout
             return
         }
-        val isValid = onVerifyPin(entered, true)
+        val isValid = onVerifyPin(entered)
         if (isValid) {
             onSuccess()
         } else {
@@ -71,15 +72,11 @@ fun AuthPinLockScreen(
             lockoutSeconds = currentLockout
             return
         }
-        if (pin.length < 6) {
+        if (pin.length < pinLength) {
             val next = pin + d
             pin = next
             isError = false
-            // If user typed 4+ digits, check if valid without recording a failure (they may be typing 5-6 digits)
-            if (next.length >= 4 && onVerifyPin(next, false)) {
-                onSuccess()
-            } else if (next.length == 6) {
-                // Reached max length, verify with failure recording
+            if (next.length == pinLength) {
                 submitPin(next)
             }
         }
@@ -147,10 +144,9 @@ fun AuthPinLockScreen(
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // Dots indicator (4 to 6 dots)
+                // Dots indicator
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    val targetLen = 4
-                    for (i in 0 until targetLen) {
+                    for (i in 0 until pinLength) {
                         val isFilled = i < pin.length
                         Box(
                             modifier = Modifier
@@ -183,7 +179,7 @@ fun AuthPinLockScreen(
                 } else if (isError) {
                     Spacer(modifier = Modifier.height(10.dp))
                     Text(
-                        text = "PIN incorreto. (${failedAttempts}/3 tentativas antes do bloqueio)",
+                        text = "PIN incorreto. (${failedAttempts.coerceAtMost(2)}/3 tentativas antes do bloqueio)",
                         color = StatusSkipped,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold
@@ -198,7 +194,7 @@ fun AuthPinLockScreen(
                     listOf("1", "2", "3"),
                     listOf("4", "5", "6"),
                     listOf("7", "8", "9"),
-                    listOf(if (pin.length >= 4) "OK" else "", "0", "DEL")
+                    listOf(if (pin.length == pinLength) "OK" else "", "0", "DEL")
                 )
 
                 rows.forEach { row ->

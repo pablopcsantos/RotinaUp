@@ -29,14 +29,23 @@ class AlarmReceiver : BroadcastReceiver() {
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 when (action) {
-                    Intent.ACTION_BOOT_COMPLETED -> {
-                        AlarmScheduler.rescheduleAllAlarms(context)
+                    Intent.ACTION_BOOT_COMPLETED,
+                    Intent.ACTION_TIME_CHANGED,
+                    Intent.ACTION_TIMEZONE_CHANGED -> {
+                        AlarmScheduler.rescheduleAllAlarmsSuspend(context)
                     }
 
                     AlarmScheduler.ACTION_HABIT_REMINDER -> {
                         val habitId = intent.getLongExtra(AlarmScheduler.EXTRA_HABIT_ID, -1L)
                         if (habitId != -1L) {
-                            handleHabitReminder(context, habitId)
+                            handleHabitReminder(context, habitId, isSnooze = false)
+                        }
+                    }
+
+                    AlarmScheduler.ACTION_HABIT_SNOOZE_FIRE -> {
+                        val habitId = intent.getLongExtra(AlarmScheduler.EXTRA_HABIT_ID, -1L)
+                        if (habitId != -1L) {
+                            handleHabitReminder(context, habitId, isSnooze = true)
                         }
                     }
 
@@ -64,13 +73,18 @@ class AlarmReceiver : BroadcastReceiver() {
         }
     }
 
-    private suspend fun handleHabitReminder(context: Context, habitId: Long) {
+    private suspend fun handleHabitReminder(context: Context, habitId: Long, isSnooze: Boolean = false) {
         val db = AppDatabase.getDatabase(context)
-        val settings = db.settingsDao().getSettings().firstOrNull() ?: return
-        if (!settings.notificationsEnabled || !settings.overdueRemindersEnabled) return
-
         val habits = db.habitDao().getAllActiveHabits().firstOrNull() ?: emptyList()
         val habit = habits.find { it.id == habitId } ?: return
+
+        // Always reschedule the next regular occurrence immediately so the recurring chain is preserved
+        if (!isSnooze) {
+            AlarmScheduler.scheduleHabitReminder(context, habit)
+        }
+
+        val settings = db.settingsDao().getSettings().firstOrNull() ?: return
+        if (!settings.notificationsEnabled || !settings.overdueRemindersEnabled) return
 
         val todayDateStr = DateUtils.getTodayDateString(0)
         val todayIsoDay = DateUtils.getIsoDayOfWeek(todayDateStr)
@@ -80,13 +94,8 @@ class AlarmReceiver : BroadcastReceiver() {
         val todayLogs = db.habitDao().getLogsForDate(todayDateStr).firstOrNull() ?: emptyList()
         val existingLog = todayLogs.find { it.habitId == habit.id }
         if (existingLog?.status == "DONE" || existingLog?.status == "SKIPPED") {
-            // Already handled today, schedule next occurrence
-            AlarmScheduler.scheduleHabitReminder(context, habit)
             return
         }
-
-        // Reschedule next occurrence ahead
-        AlarmScheduler.scheduleHabitReminder(context, habit)
 
         // Post system notification
         ensureNotificationChannel(context)
@@ -190,6 +199,9 @@ class AlarmReceiver : BroadcastReceiver() {
 
     private suspend fun handleQuickDone(context: Context, habitId: Long) {
         val db = AppDatabase.getDatabase(context)
+        val habits = db.habitDao().getAllActiveHabits().firstOrNull() ?: emptyList()
+        val habit = habits.find { it.id == habitId } ?: return
+
         val today = DateUtils.getTodayDateString(0)
         db.habitDao().insertOrUpdateLog(
             HabitLog(
@@ -206,12 +218,12 @@ class AlarmReceiver : BroadcastReceiver() {
     private fun handleSnooze(context: Context, habitId: Long) {
         NotificationManagerCompat.from(context).cancel(habitId.toInt())
         val intent = Intent(context, AlarmReceiver::class.java).apply {
-            action = AlarmScheduler.ACTION_HABIT_REMINDER
+            action = AlarmScheduler.ACTION_HABIT_SNOOZE_FIRE
             putExtra(AlarmScheduler.EXTRA_HABIT_ID, habitId)
         }
         val pendingIntent = PendingIntent.getBroadcast(
             context,
-            habitId.toInt(),
+            (habitId * 10 + 3).toInt(),
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
