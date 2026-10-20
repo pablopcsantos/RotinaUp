@@ -33,7 +33,9 @@ data class UserSettings(
     val mandatoryRemindersEnabled: Boolean = true,
     val mandatoryDeadlineTime: String = "22:00",
     val mandatoryIntervalMinutes: Int = 15,
-    val mandatoryAlarmSound: Boolean = true
+    val mandatoryAlarmSound: Boolean = true,
+    // First run initialization flag (prevents re-seeding when user deletes all habits)
+    val hasSeededInitialData: Boolean = false
 ) {
     fun hasPin(): Boolean {
         return !pinHash.isNullOrBlank() || !pinCode.isNullOrBlank()

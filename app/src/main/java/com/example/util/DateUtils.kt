@@ -19,6 +19,10 @@ object DateUtils {
         return getTimeFormat().format(Date())
     }
 
+    fun formatTimestampToIso(timestamp: Long): String {
+        return getIsoFormat().format(Date(timestamp))
+    }
+
     fun parseIso(dateStr: String): Date? {
         return try {
             getIsoFormat().parse(dateStr)

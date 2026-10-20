@@ -7,7 +7,6 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.os.Build
-import android.view.View
 import android.widget.RemoteViews
 import com.example.MainActivity
 import com.example.R
@@ -25,13 +24,22 @@ class RotinaUpWidgetProvider : AppWidgetProvider() {
         appWidgetManager: AppWidgetManager,
         appWidgetIds: IntArray
     ) {
-        for (appWidgetId in appWidgetIds) {
-            updateAppWidget(context, appWidgetManager, appWidgetId)
+        val pendingResult = goAsync()
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                for (appWidgetId in appWidgetIds) {
+                    updateAppWidgetSync(context, appWidgetManager, appWidgetId)
+                }
+            } catch (t: Throwable) {
+                android.util.Log.e("RotinaUpWidget", "Erro durante onUpdate do widget", t)
+            } finally {
+                pendingResult.finish()
+            }
         }
     }
 
     companion object {
-        fun updateAppWidget(
+        fun updateAppWidgetSync(
             context: Context,
             appWidgetManager: AppWidgetManager,
             appWidgetId: Int
@@ -68,79 +76,82 @@ class RotinaUpWidgetProvider : AppWidgetProvider() {
                 }
             }
 
-            // Asynchronously load habits and logs to populate the 7-day adherence dots
-            CoroutineScope(Dispatchers.IO).launch {
-                try {
-                    val db = AppDatabase.getDatabase(context)
-                    val allActiveHabits = db.habitDao().getAllActiveHabits().firstOrNull() ?: emptyList()
-                    val habits = allActiveHabits.filter { it.showInWidget }.sortedBy { it.targetTime }
-                    val allLogs = db.habitDao().getAllLogs().firstOrNull() ?: emptyList()
-
-                    views.removeAllViews(R.id.widget_habits_container)
-
-                    val dotIds = listOf(
-                        R.id.dot_1, R.id.dot_2, R.id.dot_3,
-                        R.id.dot_4, R.id.dot_5, R.id.dot_6, R.id.dot_7
-                    )
-
-                    habits.forEach { habit ->
-                        val rowView = RemoteViews(context.packageName, R.layout.widget_habit_item)
-                        rowView.setTextViewText(R.id.habit_item_name, habit.name)
-                        rowView.setTextViewText(R.id.habit_item_time, habit.targetTime)
-
-                        // Populate 7-day adherence dots
-                        last7Days.forEachIndexed { dIdx, (dateStr, _, isToday) ->
-                            if (dIdx < dotIds.size) {
-                                val dotId = dotIds[dIdx]
-                                val log = allLogs.find { it.habitId == habit.id && it.date == dateStr }
-                                val isoDay = DateUtils.getIsoDayOfWeek(dateStr)
-                                val isScheduled = habit.daysOfWeek.split(",")
-                                    .mapNotNull { it.trim().toIntOrNull() }
-                                    .contains(isoDay)
-
-                                val dotDrawable = when {
-                                    log?.status == "DONE" -> R.drawable.widget_dot_done
-                                    log?.status == "PARTIAL" -> R.drawable.widget_dot_partial
-                                    log?.status == "SKIPPED" -> R.drawable.widget_dot_missed
-                                    !isScheduled -> R.drawable.widget_dot_empty
-                                    !isToday -> R.drawable.widget_dot_missed
-                                    else -> R.drawable.widget_dot_empty
-                                }
-                                rowView.setImageViewResource(dotId, dotDrawable)
-                            }
-                        }
-
-                        views.addView(R.id.widget_habits_container, rowView)
-                    }
-
-                    if (habits.isEmpty()) {
-                        views.setTextViewText(
-                            R.id.widget_more_text,
-                            "Nenhum hábito no widget • Toque para configurar"
-                        )
-                    } else {
-                        views.setTextViewText(
-                            R.id.widget_more_text,
-                            "${habits.size} hábito${if (habits.size > 1) "s" else ""} no widget • 🟢 Feito 🟠 Parcial 🔴 Não feito"
-                        )
-                    }
-
-                    appWidgetManager.updateAppWidget(appWidgetId, views)
-                } catch (t: Throwable) {
-                    android.util.Log.e("RotinaUpWidget", "Falha ao atualizar dados do widget", t)
-                    appWidgetManager.updateAppWidget(appWidgetId, views)
+            try {
+                val db = AppDatabase.getDatabase(context)
+                val allActiveHabits = kotlinx.coroutines.runBlocking {
+                    db.habitDao().getAllActiveHabits().firstOrNull() ?: emptyList()
                 }
-            }
+                val habits = allActiveHabits.filter { it.showInWidget }.sortedBy { it.targetTime }
+                val allLogs = kotlinx.coroutines.runBlocking {
+                    db.habitDao().getAllLogs().firstOrNull() ?: emptyList()
+                }
 
-            appWidgetManager.updateAppWidget(appWidgetId, views)
+                views.removeAllViews(R.id.widget_habits_container)
+
+                val dotIds = listOf(
+                    R.id.dot_1, R.id.dot_2, R.id.dot_3,
+                    R.id.dot_4, R.id.dot_5, R.id.dot_6, R.id.dot_7
+                )
+
+                habits.forEach { habit ->
+                    val rowView = RemoteViews(context.packageName, R.layout.widget_habit_item)
+                    rowView.setTextViewText(R.id.habit_item_name, habit.name)
+                    rowView.setTextViewText(R.id.habit_item_time, habit.targetTime)
+
+                    // Populate 7-day adherence dots
+                    last7Days.forEachIndexed { dIdx, (dateStr, _, isToday) ->
+                        if (dIdx < dotIds.size) {
+                            val dotId = dotIds[dIdx]
+                            val log = allLogs.find { it.habitId == habit.id && it.date == dateStr }
+                            val isoDay = DateUtils.getIsoDayOfWeek(dateStr)
+                            val isScheduled = habit.isScheduledOn(isoDay)
+
+                            val dotDrawable = when {
+                                log?.status == "DONE" -> R.drawable.widget_dot_done
+                                log?.status == "PARTIAL" -> R.drawable.widget_dot_partial
+                                log?.status == "SKIPPED" -> R.drawable.widget_dot_missed
+                                !isScheduled -> R.drawable.widget_dot_empty
+                                !isToday -> R.drawable.widget_dot_missed
+                                else -> R.drawable.widget_dot_empty
+                            }
+                            rowView.setImageViewResource(dotId, dotDrawable)
+                        }
+                    }
+
+                    views.addView(R.id.widget_habits_container, rowView)
+                }
+
+                if (habits.isEmpty()) {
+                    views.setTextViewText(
+                        R.id.widget_more_text,
+                        "Nenhum hábito no widget • Toque para configurar"
+                    )
+                } else {
+                    views.setTextViewText(
+                        R.id.widget_more_text,
+                        "${habits.size} hábito${if (habits.size > 1) "s" else ""} no widget • 🟢 Feito 🟠 Parcial 🔴 Não feito"
+                    )
+                }
+
+                appWidgetManager.updateAppWidget(appWidgetId, views)
+            } catch (t: Throwable) {
+                android.util.Log.e("RotinaUpWidget", "Falha ao sincronizar dados do widget", t)
+                appWidgetManager.updateAppWidget(appWidgetId, views)
+            }
         }
 
         fun updateAllWidgets(context: Context) {
-            val appWidgetManager = AppWidgetManager.getInstance(context)
-            val thisWidget = ComponentName(context, RotinaUpWidgetProvider::class.java)
-            val allWidgetIds = appWidgetManager.getAppWidgetIds(thisWidget)
-            for (id in allWidgetIds) {
-                updateAppWidget(context, appWidgetManager, id)
+            CoroutineScope(Dispatchers.IO).launch {
+                try {
+                    val appWidgetManager = AppWidgetManager.getInstance(context)
+                    val thisWidget = ComponentName(context, RotinaUpWidgetProvider::class.java)
+                    val allWidgetIds = appWidgetManager.getAppWidgetIds(thisWidget)
+                    for (id in allWidgetIds) {
+                        updateAppWidgetSync(context, appWidgetManager, id)
+                    }
+                } catch (t: Throwable) {
+                    android.util.Log.e("RotinaUpWidget", "Erro ao disparar updateAllWidgets", t)
+                }
             }
         }
 

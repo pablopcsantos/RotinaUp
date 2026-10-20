@@ -2,6 +2,7 @@ package com.example.data.model
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
+import com.example.util.DateUtils
 
 @Entity(tableName = "habitos")
 data class Habito(
@@ -20,6 +21,33 @@ data class Habito(
     val dismissPhrase: String = "eu assumo o compromisso",
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
-)
+) {
+    /**
+     * Formal, centralized parsing for daysOfWeek.
+     * Empty string strictly means NO days scheduled (emptySet).
+     */
+    fun getScheduledDaysOfWeek(): Set<Int> {
+        if (daysOfWeek.isBlank()) return emptySet()
+        return daysOfWeek.split(",")
+            .mapNotNull { it.trim().toIntOrNull() }
+            .filter { it in 1..7 }
+            .toSet()
+    }
+
+    /**
+     * Checks if the habit is scheduled on a specific ISO day (1=Mon ... 7=Sun).
+     */
+    fun isScheduledOn(isoDay: Int): Boolean {
+        return getScheduledDaysOfWeek().contains(isoDay)
+    }
+
+    /**
+     * Checks if the habit is scheduled on a given ISO date (YYYY-MM-DD).
+     */
+    fun isScheduledOnDate(dateStr: String): Boolean {
+        val isoDay = DateUtils.getIsoDayOfWeek(dateStr)
+        return isScheduledOn(isoDay)
+    }
+}
 
 typealias Habit = Habito

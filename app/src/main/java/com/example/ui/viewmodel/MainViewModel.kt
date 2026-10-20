@@ -15,6 +15,12 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.util.*
 
+sealed interface AuthState {
+    data object Loading : AuthState
+    data object Locked : AuthState
+    data object Unlocked : AuthState
+}
+
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val db = AppDatabase.getDatabase(application)
     private val habitDao = db.habitDao()
@@ -76,6 +82,26 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         .map { it ?: UserSettings() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), UserSettings())
 
+    private val _isSessionUnlocked = MutableStateFlow(false)
+    val isSessionUnlocked: StateFlow<Boolean> = _isSessionUnlocked.asStateFlow()
+
+    val authState: StateFlow<AuthState> = combine(
+        settingsDao.getSettings(),
+        _isSessionUnlocked
+    ) { settings, isUnlocked ->
+        if (settings == null) {
+            AuthState.Loading
+        } else if (settings.requireAuth && settings.hasPin() && !isUnlocked) {
+            AuthState.Locked
+        } else {
+            AuthState.Unlocked
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AuthState.Loading)
+
+    fun unlockSession() {
+        _isSessionUnlocked.value = true
+    }
+
     // Snooze until timestamp for overdue reminder
     private val _snoozeUntil = MutableStateFlow(0L)
     val snoozeUntil: StateFlow<Long> = _snoozeUntil.asStateFlow()
@@ -94,9 +120,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
         viewModelScope.launch {
-            val count = habitDao.getAllHabits().first().size
-            if (count == 0) {
+            val current = settingsDao.getSettings().firstOrNull()
+            if (current == null || !current.hasSeededInitialData) {
                 seedInitialData()
+                val updated = (current ?: UserSettings()).copy(hasSeededInitialData = true)
+                settingsDao.insertOrUpdateSettings(updated)
             }
         }
     }
@@ -309,12 +337,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun verifyPin(enteredPin: String): Boolean {
         val current = userSettings.value
         val isValid = com.example.util.SecurityUtils.verifyPin(enteredPin, current)
-        if (isValid && !current.pinCode.isNullOrBlank()) {
-            // Upgrade legacy plain text pinCode to salted SHA-256 hash automatically
-            viewModelScope.launch {
-                val upgraded = com.example.util.SecurityUtils.createHashedSettings(current.pinCode, current)
-                settingsDao.insertOrUpdateSettings(upgraded)
+        if (isValid) {
+            com.example.util.SecurityUtils.resetFailedAttempts(getApplication())
+            unlockSession()
+            // Upgrade legacy plain-text pinCode or legacy SHA-256 to modern PBKDF2
+            val isLegacy = !current.pinCode.isNullOrBlank() || (current.pinHash?.startsWith("PBKDF2$") != true)
+            if (isLegacy) {
+                viewModelScope.launch {
+                    val upgraded = com.example.util.SecurityUtils.createHashedSettings(enteredPin, current)
+                    settingsDao.insertOrUpdateSettings(upgraded)
+                }
             }
+        } else {
+            com.example.util.SecurityUtils.recordFailedAttempt(getApplication())
         }
         return isValid
     }
@@ -404,20 +439,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         val matrices = activeHabitsList.map { habit ->
             val hLogs = weeklyLogs.filter { it.habitId == habit.id }
-            val done = hLogs.count { it.status == "DONE" }
-            val partial = hLogs.count { it.status == "PARTIAL" }
+            val createdDateStr = DateUtils.formatTimestampToIso(habit.createdAt)
 
-            val habitDays = habit.daysOfWeek.split(",").mapNotNull { it.trim().toIntOrNull() }.toSet()
-            val scheduledDays = dates.count { dStr ->
-                val isoDay = DateUtils.getIsoDayOfWeek(dStr)
-                habitDays.isEmpty() || habitDays.contains(isoDay)
+            // Strictly eligible scheduled dates: not before habit creation, and scheduled for that day
+            val eligibleScheduledDates = dates.filter { dStr ->
+                dStr >= createdDateStr && habit.isScheduledOnDate(dStr)
             }
+            val scheduledDays = eligibleScheduledDates.size
+
+            // Numerator strictly counts completions on eligible scheduled dates
+            val eligibleLogs = hLogs.filter { eligibleScheduledDates.contains(it.date) }
+            val done = eligibleLogs.count { it.status == "DONE" }
+            val partial = eligibleLogs.count { it.status == "PARTIAL" }
 
             val weighted = done + (partial * 0.5f)
             val rate = if (scheduledDays > 0) {
                 ((weighted / scheduledDays) * 100f).toInt().coerceIn(0, 100)
             } else {
-                if (done > 0 || partial > 0) 100 else 0
+                100 // No scheduled days in this week window
             }
 
             if (scheduledDays > 0) {
@@ -442,6 +481,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 completedDaysCount = done
             )
         }
+
+        val hasEnoughData = daysWithData >= 5 && activeHabitsList.isNotEmpty() && totalScheduledChecks >= 5
 
         val overallAdherence = if (totalScheduledChecks > 0) {
             ((totalWeightedDone / totalScheduledChecks) * 100f).toInt().coerceIn(0, 100)
@@ -482,6 +523,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             .map { Pair(it.key, it.value) }
 
         val suggestion = when {
+            !hasEnoughData -> "Continue registrando seus hábitos diariamente. São necessários pelo menos 5 dias de registros na semana para gerar insights precisos."
             overallAdherence < 60 -> "Considere reduzir a quantidade de hábitos ou começar com blocos menores para consolidar o ritmo antes de expandir."
             napCount >= 3 -> "Cochilos frequentes foram registrados. Procure fortalecer o sono noturno para evitar sonolência diurna excessiva."
             else -> "Excelente consistência na rotina! Mantenha os horários regulares de deitar e despertar para consolidar seus ciclos circadianos."
@@ -599,12 +641,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 title = "Semana de Ferro",
                 category = "consistencia",
                 icon = "⚡",
-                unlocked = overallAdherence >= 80,
+                unlocked = hasEnoughData && overallAdherence >= 80,
                 description = "Atingiu 80% ou mais de adesão geral em todos os hábitos da semana.",
                 requirement = "Adesão semanal ≥ 80%",
                 currentProgress = overallAdherence.toFloat(),
                 targetProgress = 80f,
-                progressText = "$overallAdherence% / 80%"
+                progressText = if (hasEnoughData) "$overallAdherence% / 80%" else "Dados insuficientes"
             ),
             WeeklyMedal(
                 id = "transformacao_verde",

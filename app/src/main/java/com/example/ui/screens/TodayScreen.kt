@@ -64,8 +64,7 @@ fun TodayScreen(
     // Filter today's habits
     val todayHabits = remember(activeHabits, todayIsoDay) {
         activeHabits.filter { h ->
-            val days = h.daysOfWeek.split(",").mapNotNull { it.trim().toIntOrNull() }
-            days.isEmpty() || days.contains(todayIsoDay)
+            h.isScheduledOn(todayIsoDay)
         }.sortedBy { it.targetTime }
     }
 
@@ -528,7 +527,7 @@ fun TodayScreen(
 
                                     // Check if habit is scheduled for this day
                                     val isoDay = DateUtils.getIsoDayOfWeek(dStr)
-                                    val isScheduled = habit.daysOfWeek.split(",").mapNotNull { it.trim().toIntOrNull() }.contains(isoDay)
+                                    val isScheduled = habit.isScheduledOn(isoDay)
 
                                     val dotColor = when {
                                         dotDone -> StatusDone

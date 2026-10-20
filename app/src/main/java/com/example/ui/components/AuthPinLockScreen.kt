@@ -17,11 +17,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.theme.StatusDone
 import com.example.ui.theme.StatusSkipped
+import com.example.util.SecurityUtils
 import kotlinx.coroutines.delay
 
 @Composable
@@ -29,46 +31,49 @@ fun AuthPinLockScreen(
     onVerifyPin: (String) -> Boolean,
     onSuccess: () -> Unit
 ) {
+    val context = LocalContext.current
     var pin by remember { mutableStateOf("") }
     var isError by remember { mutableStateOf(false) }
-    var failedAttempts by remember { mutableStateOf(0) }
-    var lockoutSeconds by remember { mutableStateOf(0) }
+    var failedAttempts by remember { mutableStateOf(SecurityUtils.getFailedAttempts(context)) }
+    var lockoutSeconds by remember { mutableStateOf(SecurityUtils.getLockoutRemainingSeconds(context)) }
 
-    // Rate limiting countdown timer
+    // Persistent rate limiting countdown timer
     LaunchedEffect(lockoutSeconds) {
-        if (lockoutSeconds > 0) {
+        while (lockoutSeconds > 0) {
             delay(1000)
-            lockoutSeconds -= 1
+            lockoutSeconds = SecurityUtils.getLockoutRemainingSeconds(context)
         }
     }
 
     fun submitPin(entered: String) {
-        if (lockoutSeconds > 0) return
+        val currentLockout = SecurityUtils.getLockoutRemainingSeconds(context)
+        if (currentLockout > 0) {
+            lockoutSeconds = currentLockout
+            return
+        }
         val isValid = onVerifyPin(entered)
         if (isValid) {
-            failedAttempts = 0
             onSuccess()
         } else {
             isError = true
             pin = ""
-            val nextFailed = failedAttempts + 1
-            failedAttempts = nextFailed
-            if (nextFailed >= 3) {
-                // Progressive lockout delay (15s for 3 attempts, 30s for 4+)
-                lockoutSeconds = if (nextFailed == 3) 15 else 30
-            }
+            lockoutSeconds = SecurityUtils.getLockoutRemainingSeconds(context)
+            failedAttempts = SecurityUtils.getFailedAttempts(context)
         }
     }
 
     fun onDigit(d: String) {
-        if (lockoutSeconds > 0) return
+        val currentLockout = SecurityUtils.getLockoutRemainingSeconds(context)
+        if (currentLockout > 0) {
+            lockoutSeconds = currentLockout
+            return
+        }
         if (pin.length < 6) {
             val next = pin + d
             pin = next
             isError = false
             // Check if matches immediately (e.g. 4-digit PIN)
             if (onVerifyPin(next)) {
-                failedAttempts = 0
                 onSuccess()
             } else if (next.length == 6) {
                 // Reached max length, verify and flag error if wrong

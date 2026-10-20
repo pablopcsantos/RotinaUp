@@ -100,6 +100,8 @@ fun RotinaUpApp(
     val snoozeUntil by viewModel.snoozeUntil.collectAsState()
     val mandatorySnoozeUntil by viewModel.mandatorySnoozeUntil.collectAsState()
 
+    val authState by viewModel.authState.collectAsState()
+
     // Settle delay to ensure Room database flows have emitted their initial disk state
     // before any modal dialog or alarm evaluation occurs (eliminates startup dialog flash)
     var isDataSettled by remember { mutableStateOf(false) }
@@ -109,9 +111,6 @@ fun RotinaUpApp(
     }
 
     val isFromWidget = remember(intent) { intent?.getBooleanExtra("from_widget", false) == true }
-
-    // State for PIN screen lock
-    var isUnlocked by remember { mutableStateOf(!settings.requireAuth || !settings.hasPin()) }
 
     // Dialog & overlay states
     var activeFocusHabit by remember { mutableStateOf<Habito?>(null) }
@@ -127,8 +126,7 @@ fun RotinaUpApp(
         if (!isDataSettled || isFromWidget || !settings.overdueRemindersEnabled || System.currentTimeMillis() < snoozeUntil) null
         else {
             activeHabitsList.firstOrNull { h ->
-                val days = h.daysOfWeek.split(",").mapNotNull { it.trim().toIntOrNull() }
-                val isToday = days.isEmpty() || days.contains(todayIsoDay)
+                val isToday = h.isScheduledOn(todayIsoDay)
                 val log = todayLogsMap[h.id]
                 val isDoneOrSkipped = log?.status == "DONE" || log?.status == "SKIPPED"
                 isToday && !isDoneOrSkipped && h.targetTime <= currentTimeStr
@@ -171,11 +169,24 @@ fun RotinaUpApp(
         }
     }
 
-    // 1. PIN Lock Screen
-    if (!isUnlocked && settings.requireAuth && settings.hasPin()) {
+    // 0. Loading State: Do not expose any protected screens while loading settings
+    if (authState is com.example.ui.viewmodel.AuthState.Loading) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background),
+            contentAlignment = Alignment.Center
+        ) {
+            CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+        }
+        return
+    }
+
+    // 1. PIN Lock Screen: Must verify before granting access
+    if (authState is com.example.ui.viewmodel.AuthState.Locked) {
         AuthPinLockScreen(
             onVerifyPin = { entered -> viewModel.verifyPin(entered) },
-            onSuccess = { isUnlocked = true }
+            onSuccess = { viewModel.unlockSession() }
         )
         return
     }

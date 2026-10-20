@@ -40,21 +40,21 @@ class WeeklyReportTest {
         assertNull("Empty sleep logs should not produce bedtime variation", report.bedtimeVariationHours)
         assertEquals(0, report.napCount)
         assertFalse(report.hasEnoughData)
+        assertTrue(report.suggestion.contains("pelo menos 5 dias"))
     }
 
     @Test
     fun `test habit adherence with DONE and PARTIAL weights`() {
-        val today = DateUtils.getTodayDateString(0)
         val habit = Habit(
             id = 10,
             name = "Leitura Matinal",
             type = "FOCUS",
             targetTime = "08:00",
             daysOfWeek = "1,2,3,4,5,6,7", // all 7 days
-            isActive = true
+            isActive = true,
+            createdAt = System.currentTimeMillis() - (10L * 24 * 3600 * 1000) // created 10 days ago
         )
 
-        // 3 DONE days and 2 PARTIAL days
         val dates = (6 downTo 0).map { DateUtils.getTodayDateString(-it) }
         val logs = listOf(
             HabitLog(habitId = 10, date = dates[0], status = "DONE"),
@@ -78,6 +78,81 @@ class WeeklyReportTest {
         assertEquals(57, matrix.rate)
         assertEquals(3, matrix.completedDaysCount)
         assertEquals(57, report.overallAdherence)
+    }
+
+    @Test
+    fun `test habit created mid-week does not count prior days against adherence`() {
+        val dates = (6 downTo 0).map { DateUtils.getTodayDateString(-it) }
+
+        // Habit was created 2 days ago (only dates[-2], dates[-1], dates[0] are eligible)
+        val twoDaysAgoTimestamp = System.currentTimeMillis() - (2L * 24 * 3600 * 1000)
+        val midWeekHabit = Habit(
+            id = 20,
+            name = "Corrida",
+            type = "EXERCISE",
+            targetTime = "18:00",
+            daysOfWeek = "1,2,3,4,5,6,7",
+            isActive = true,
+            createdAt = twoDaysAgoTimestamp
+        )
+
+        // User completed all 3 days since habit was created
+        val logs = listOf(
+            HabitLog(habitId = 20, date = dates[4], status = "DONE"),
+            HabitLog(habitId = 20, date = dates[5], status = "DONE"),
+            HabitLog(habitId = 20, date = dates[6], status = "DONE")
+        )
+
+        val report = viewModel.computeWeeklyReport(
+            habits = listOf(midWeekHabit),
+            logs = logs,
+            sleepLogs = emptyList(),
+            napLogs = emptyList(),
+            dailyReviews = emptyList()
+        )
+
+        // Habit has 3 eligible scheduled days, and all 3 are DONE -> 100% adherence, NOT 3/7 (42%)!
+        val matrix = report.habitMatrices.first()
+        assertEquals(100, matrix.rate)
+        assertEquals(3, matrix.completedDaysCount)
+        assertEquals(100, report.overallAdherence)
+    }
+
+    @Test
+    fun `test habit adherence excludes logs recorded on unscheduled days`() {
+        val dates = (6 downTo 0).map { DateUtils.getTodayDateString(-it) }
+
+        // Habit is only scheduled on a day that does NOT match dates[0]
+        val isoDayToday = DateUtils.getIsoDayOfWeek(dates.last())
+        // Habit is scheduled ONLY today
+        val singleDayHabit = Habit(
+            id = 30,
+            name = "Faxina Semanal",
+            type = "CUSTOM",
+            targetTime = "10:00",
+            daysOfWeek = "$isoDayToday",
+            isActive = true,
+            createdAt = System.currentTimeMillis() - (10L * 24 * 3600 * 1000)
+        )
+
+        // Log done today, but also log recorded on an unscheduled yesterday
+        val logs = listOf(
+            HabitLog(habitId = 30, date = dates[5], status = "DONE"), // unscheduled day
+            HabitLog(habitId = 30, date = dates[6], status = "DONE")  // scheduled today
+        )
+
+        val report = viewModel.computeWeeklyReport(
+            habits = listOf(singleDayHabit),
+            logs = logs,
+            sleepLogs = emptyList(),
+            napLogs = emptyList(),
+            dailyReviews = emptyList()
+        )
+
+        // Only 1 scheduled day in the week, 1 done on that scheduled day -> 100%
+        val matrix = report.habitMatrices.first()
+        assertEquals(100, matrix.rate)
+        assertEquals(1, matrix.completedDaysCount)
     }
 
     @Test
@@ -109,7 +184,6 @@ class WeeklyReportTest {
         assertNotNull(report.avgSleepHours)
         assertEquals(8.0, report.avgSleepHours!!, 0.01)
         assertNotNull(report.bedtimeVariationHours)
-        // Bedtimes 23:00 (-60m) and 23:30 (-30m) -> diff is 30m, stdDev is 15m -> ~0.3h
         assertTrue(report.bedtimeVariationHours!! > 0.0)
     }
 }
