@@ -78,9 +78,33 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private val timeTickReceiver = object : android.content.BroadcastReceiver() {
+        override fun onReceive(context: android.content.Context?, intent: android.content.Intent?) {
+            viewModel.updateCurrentTime()
+        }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        val filter = android.content.IntentFilter().apply {
+            addAction(android.content.Intent.ACTION_DATE_CHANGED)
+            addAction(android.content.Intent.ACTION_TIME_TICK)
+            addAction(android.content.Intent.ACTION_TIMEZONE_CHANGED)
+            addAction(android.content.Intent.ACTION_TIME_CHANGED)
+        }
+        registerReceiver(timeTickReceiver, filter)
+    }
+
     override fun onResume() {
         super.onResume()
         viewModel.updateCurrentTime()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        try {
+            unregisterReceiver(timeTickReceiver)
+        } catch (_: Exception) {}
     }
 }
 

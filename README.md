@@ -33,6 +33,14 @@ RotinaUp é um aplicativo Android nativo construído com **Kotlin**, **Jetpack C
 - **Android SDK:** Compile SDK 36, Target SDK 36, Min SDK 24
 - **Gradle:** 9.3+
 
+### Variáveis de Ambiente & Segredos (.env)
+O projeto utiliza o Secrets Gradle Plugin para injeção segura de propriedades.
+Copie o arquivo `.env.example` para `.env` caso deseje configurar propriedades locais:
+```properties
+# .env
+GEMINI_API_KEY=sua_chave_aqui
+```
+
 ### Comandos de Build
 ```bash
 # Compilar versão Debug
@@ -41,12 +49,20 @@ gradle assembleDebug
 # Executar testes unitários e testes locais Robolectric
 gradle :app:testDebugUnitTest
 
-# Gerar pacote de Release (requer variáveis de keystore)
+# Gerar pacote de Release
+# Requer as variáveis de ambiente de assinatura configuradas:
+export KEYSTORE_PATH="/caminho/para/my-upload-key.jks"
+export STORE_PASSWORD="senha_do_keystore"
+export KEY_PASSWORD="senha_da_chave"
 gradle assembleRelease
 ```
 
-### Integração Contínua (CI)
-O projeto conta com automação via GitHub Actions (`.github/workflows/android.yml`) executando compilação e todos os testes unitários/Robolectric a cada pull request.
+### Integração Contínua (CI/CD)
+O repositório possui automação com GitHub Actions em `.github/workflows/android.yml`:
+- Executa compilação limpa do projeto com JDK 21.
+- Roda toda a suíte de testes unitários e testes Robolectric (`gradle :app:testDebugUnitTest`).
+- Valida o schema exportado do Room Database (`exportSchema = true`) gerado via KSP.
+- Para releases automatizadas no GitHub Actions, cadastre as secrets: `KEYSTORE_BASE64`, `STORE_PASSWORD` e `KEY_PASSWORD`.
 
 ---
 

@@ -19,6 +19,13 @@ import kotlinx.coroutines.launch
 
 class RotinaUpWidgetProvider : AppWidgetProvider() {
 
+    override fun onReceive(context: Context, intent: Intent) {
+        super.onReceive(context, intent)
+        if (intent.action == ACTION_SYNC_WIDGET) {
+            updateAllWidgets(context)
+        }
+    }
+
     override fun onUpdate(
         context: Context,
         appWidgetManager: AppWidgetManager,
@@ -137,15 +144,27 @@ class RotinaUpWidgetProvider : AppWidgetProvider() {
             } catch (t: Throwable) {
                 android.util.Log.e("RotinaUpWidget", "Falha ao sincronizar dados do widget", t)
                 try {
+                    val syncIntent = Intent(context, RotinaUpWidgetProvider::class.java).apply {
+                        action = ACTION_SYNC_WIDGET
+                    }
+                    val syncPendingIntent = PendingIntent.getBroadcast(
+                        context,
+                        appWidgetId,
+                        syncIntent,
+                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                    )
                     views.removeAllViews(R.id.widget_habits_container)
                     views.setTextViewText(
                         R.id.widget_more_text,
-                        "⚠️ Toque para abrir o app e sincronizar"
+                        "⚠️ Toque para sincronizar seus hábitos"
                     )
+                    views.setOnClickPendingIntent(R.id.widget_more_text, syncPendingIntent)
                     appWidgetManager.updateAppWidget(appWidgetId, views)
                 } catch (_: Throwable) {}
             }
         }
+
+        const val ACTION_SYNC_WIDGET = "com.example.ACTION_SYNC_WIDGET"
 
         fun updateAllWidgets(context: Context) {
             CoroutineScope(Dispatchers.IO).launch {

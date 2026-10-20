@@ -378,7 +378,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             sleepDao.deleteAllDailyReviews()
             settingsDao.deleteAllAlarmEvents()
             val current = userSettings.value
-            settingsDao.insertOrUpdateSettings(current.copy(isDummyActive = false, hasSeenDummyPrompt = true))
+            settingsDao.insertOrUpdateSettings(current.copy(isDummyActive = false, hasSeenDummyPrompt = true, hasSeededInitialData = true))
             showToast("Conteúdo de teste removido! Pronto para seus registros reais.")
         }
     }
@@ -507,7 +507,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         val weeklySleep = sleepLogs.filter { dates.contains(it.date) && it.durationMinutes > 0 }
-        val avgSleep: Double? = if (weeklySleep.isNotEmpty()) {
+        val avgSleep: Double? = if (weeklySleep.size >= 2) {
             val totalHours = weeklySleep.sumOf { it.durationMinutes.toDouble() } / 60.0
             (Math.round((totalHours / weeklySleep.size) * 10.0) / 10.0)
         } else null
@@ -522,8 +522,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
             val mean = minutesList.average()
             val variance = minutesList.map { (it - mean) * (it - mean) }.average()
-            val stdDevMinutes = Math.sqrt(variance)
-            (Math.round((stdDevMinutes / 60.0) * 10.0) / 10.0)
+            if (!variance.isNaN() && variance >= 0.0) {
+                val stdDevMinutes = Math.sqrt(variance)
+                if (!stdDevMinutes.isNaN()) {
+                    (Math.round((stdDevMinutes / 60.0) * 10.0) / 10.0)
+                } else null
+            } else null
         } else null
         val weeklyNaps = napLogs.filter { dates.contains(it.date) && it.hasNap }
         val napCount = weeklyNaps.size
