@@ -25,7 +25,7 @@ class HabitoRepository(
 
     suspend fun updateHabit(habit: Habito) = habitoDao.updateHabit(habit)
 
-    suspend fun deleteHabit(habit: Habito) = habitoDao.deleteHabit(habit)
+    suspend fun deleteHabit(habit: Habito) = habitoDao.deleteHabitAndLogs(habit)
 
     suspend fun deleteAllHabits() = habitoDao.deleteAllHabits()
 

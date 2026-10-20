@@ -4,24 +4,54 @@ import java.text.SimpleDateFormat
 import java.util.*
 
 object DateUtils {
-    private val isoFormat = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT)
-    private val timeFormat = SimpleDateFormat("HH:mm", Locale.ROOT)
+    private fun getIsoFormat() = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT)
+    private fun getTimeFormat() = SimpleDateFormat("HH:mm", Locale.ROOT)
 
     fun getTodayDateString(offsetDays: Int = 0): String {
         val calendar = Calendar.getInstance()
         if (offsetDays != 0) {
             calendar.add(Calendar.DAY_OF_YEAR, offsetDays)
         }
-        return isoFormat.format(calendar.time)
+        return getIsoFormat().format(calendar.time)
     }
 
     fun getNowTimeStr(): String {
-        return timeFormat.format(Date())
+        return getTimeFormat().format(Date())
+    }
+
+    fun parseIso(dateStr: String): Date? {
+        return try {
+            getIsoFormat().parse(dateStr)
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    fun formatWidgetDate(dateStr: String): String {
+        return try {
+            val date = parseIso(dateStr) ?: return dateStr
+            val calendar = Calendar.getInstance().apply { time = date }
+            val day = calendar.get(Calendar.DAY_OF_MONTH)
+            val month = calendar.get(Calendar.MONTH) + 1
+            val dayOfWeek = when (calendar.get(Calendar.DAY_OF_WEEK)) {
+                Calendar.SUNDAY -> "Dom"
+                Calendar.MONDAY -> "Seg"
+                Calendar.TUESDAY -> "Ter"
+                Calendar.WEDNESDAY -> "Qua"
+                Calendar.THURSDAY -> "Qui"
+                Calendar.FRIDAY -> "Sex"
+                Calendar.SATURDAY -> "Sáb"
+                else -> ""
+            }
+            "$dayOfWeek, %02d/%02d".format(day, month)
+        } catch (_: Exception) {
+            dateStr
+        }
     }
 
     fun formatFriendlyDate(dateStr: String): String {
         return try {
-            val date = isoFormat.parse(dateStr) ?: return dateStr
+            val date = parseIso(dateStr) ?: return dateStr
             val calendar = Calendar.getInstance().apply { time = date }
             val dayOfWeek = when (calendar.get(Calendar.DAY_OF_WEEK)) {
                 Calendar.SUNDAY -> "Domingo"
@@ -57,7 +87,7 @@ object DateUtils {
 
     fun getDayInitial(dateStr: String): String {
         return try {
-            val date = isoFormat.parse(dateStr) ?: return "D"
+            val date = parseIso(dateStr) ?: return "D"
             val calendar = Calendar.getInstance().apply { time = date }
             when (calendar.get(Calendar.DAY_OF_WEEK)) {
                 Calendar.SUNDAY -> "D"
@@ -76,7 +106,7 @@ object DateUtils {
 
     fun getIsoDayOfWeek(dateStr: String): Int {
         return try {
-            val date = isoFormat.parse(dateStr) ?: return 1
+            val date = parseIso(dateStr) ?: return 1
             val calendar = Calendar.getInstance().apply { time = date }
             val day = calendar.get(Calendar.DAY_OF_WEEK)
             if (day == Calendar.SUNDAY) 7 else day - 1

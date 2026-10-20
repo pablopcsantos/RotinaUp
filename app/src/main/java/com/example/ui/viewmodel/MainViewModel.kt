@@ -25,7 +25,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     val audioPlayer = AudioPlayer()
 
-    val todayDateStr = DateUtils.getTodayDateString(0)
+    private val _currentDateStr = MutableStateFlow(DateUtils.getTodayDateString(0))
+    val currentDateStr: StateFlow<String> = _currentDateStr.asStateFlow()
+    val todayDateStr: String get() = _currentDateStr.value
 
     // Current time string updated periodically or on demand
     private val _currentTimeStr = MutableStateFlow(DateUtils.getNowTimeStr())
@@ -41,25 +43,33 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val allLogs: StateFlow<List<HabitLog>> = habitoRepository.allLogs
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val todayLogs: StateFlow<List<HabitLog>> = habitoRepository.getLogsForDate(todayDateStr)
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val todayLogs: StateFlow<List<HabitLog>> = _currentDateStr
+        .flatMapLatest { date -> habitoRepository.getLogsForDate(date) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val allSleepLogs: StateFlow<List<SleepLog>> = sleepDao.getAllSleepLogs()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val todaySleepLog: StateFlow<SleepLog?> = sleepDao.getSleepLog(todayDateStr)
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val todaySleepLog: StateFlow<SleepLog?> = _currentDateStr
+        .flatMapLatest { date -> sleepDao.getSleepLog(date) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     val allNapLogs: StateFlow<List<NapLog>> = sleepDao.getAllNapLogs()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val todayNapLog: StateFlow<NapLog?> = sleepDao.getNapLog(todayDateStr)
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val todayNapLog: StateFlow<NapLog?> = _currentDateStr
+        .flatMapLatest { date -> sleepDao.getNapLog(date) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     val allDailyReviews: StateFlow<List<DailyReview>> = sleepDao.getAllDailyReviews()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val todayDailyReview: StateFlow<DailyReview?> = sleepDao.getDailyReview(todayDateStr)
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val todayDailyReview: StateFlow<DailyReview?> = _currentDateStr
+        .flatMapLatest { date -> sleepDao.getDailyReview(date) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     val userSettings: StateFlow<UserSettings> = settingsDao.getSettings()
@@ -93,6 +103,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun updateCurrentTime() {
         _currentTimeStr.value = DateUtils.getNowTimeStr()
+        val today = DateUtils.getTodayDateString(0)
+        if (_currentDateStr.value != today) {
+            _currentDateStr.value = today
+        }
     }
 
     fun showToast(msg: String) {
@@ -281,6 +295,30 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun setPin(pin: String) {
+        val current = userSettings.value
+        val updated = com.example.util.SecurityUtils.createHashedSettings(pin, current)
+        updateSettings(updated)
+    }
+
+    fun removePin() {
+        val current = userSettings.value
+        updateSettings(current.copy(requireAuth = false, pinHash = null, pinSalt = null, pinCode = null))
+    }
+
+    fun verifyPin(enteredPin: String): Boolean {
+        val current = userSettings.value
+        val isValid = com.example.util.SecurityUtils.verifyPin(enteredPin, current)
+        if (isValid && !current.pinCode.isNullOrBlank()) {
+            // Upgrade legacy plain text pinCode to salted SHA-256 hash automatically
+            viewModelScope.launch {
+                val upgraded = com.example.util.SecurityUtils.createHashedSettings(current.pinCode, current)
+                settingsDao.insertOrUpdateSettings(upgraded)
+            }
+        }
+        return isValid
+    }
+
     fun clearDummyContent() {
         viewModelScope.launch {
             habitDao.deleteAllLogs()
@@ -369,16 +407,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val done = hLogs.count { it.status == "DONE" }
             val partial = hLogs.count { it.status == "PARTIAL" }
 
+            val habitDays = habit.daysOfWeek.split(",").mapNotNull { it.trim().toIntOrNull() }.toSet()
             val scheduledDays = dates.count { dStr ->
                 val isoDay = DateUtils.getIsoDayOfWeek(dStr)
-                habit.daysOfWeek.split(",").mapNotNull { it.trim().toIntOrNull() }.contains(isoDay)
-            }.coerceAtLeast(1)
+                habitDays.isEmpty() || habitDays.contains(isoDay)
+            }
 
             val weighted = done + (partial * 0.5f)
-            val rate = ((weighted / scheduledDays) * 100f).toInt().coerceIn(0, 100)
+            val rate = if (scheduledDays > 0) {
+                ((weighted / scheduledDays) * 100f).toInt().coerceIn(0, 100)
+            } else {
+                if (done > 0 || partial > 0) 100 else 0
+            }
 
-            totalScheduledChecks += scheduledDays
-            totalWeightedDone += weighted
+            if (scheduledDays > 0) {
+                totalScheduledChecks += scheduledDays
+                totalWeightedDone += weighted
+            }
 
             val dayStatuses = dates.map { dStr ->
                 val log = hLogs.find { it.date == dStr }
@@ -398,16 +443,31 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             )
         }
 
-        val possible = totalScheduledChecks.coerceAtLeast(1)
-        val overallAdherence = ((totalWeightedDone / possible) * 100f).toInt().coerceIn(0, 100)
+        val overallAdherence = if (totalScheduledChecks > 0) {
+            ((totalWeightedDone / totalScheduledChecks) * 100f).toInt().coerceIn(0, 100)
+        } else {
+            0
+        }
 
         val weeklySleep = sleepLogs.filter { dates.contains(it.date) && it.durationMinutes > 0 }
-        val avgSleep = if (weeklySleep.isNotEmpty()) {
+        val avgSleep: Double? = if (weeklySleep.isNotEmpty()) {
             val totalHours = weeklySleep.sumOf { it.durationMinutes.toDouble() } / 60.0
-            (totalHours / weeklySleep.size * 10.0).toInt() / 10.0
-        } else 7.4
+            (Math.round((totalHours / weeklySleep.size) * 10.0) / 10.0)
+        } else null
 
-        val bedtimeVar = if (weeklySleep.size > 1) 0.6 else 0.3
+        // Real bedtime variation calculation (standard deviation in hours)
+        val bedtimeVar: Double? = if (weeklySleep.size >= 2) {
+            val minutesList = weeklySleep.map { log ->
+                val parts = log.bedtimeStr.split(":")
+                val h = parts.getOrNull(0)?.toIntOrNull() ?: 23
+                val m = parts.getOrNull(1)?.toIntOrNull() ?: 0
+                if (h >= 12) (h - 24) * 60 + m else h * 60 + m
+            }
+            val mean = minutesList.average()
+            val variance = minutesList.map { (it - mean) * (it - mean) }.average()
+            val stdDevMinutes = Math.sqrt(variance)
+            (Math.round((stdDevMinutes / 60.0) * 10.0) / 10.0)
+        } else null
         val weeklyNaps = napLogs.filter { dates.contains(it.date) && it.hasNap }
         val napCount = weeklyNaps.size
 
@@ -527,12 +587,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 title = "Guardião do Sono",
                 category = "sono",
                 icon = "🌙",
-                unlocked = avgSleep >= 7.0 && bedtimeVar <= 1.0,
+                unlocked = avgSleep != null && avgSleep >= 7.0 && (bedtimeVar == null || bedtimeVar <= 1.0),
                 description = "Média de sono noturno ≥ 7h com horário de deitar regular.",
                 requirement = "≥ 7h de sono e desvio ≤ 1h",
-                currentProgress = avgSleep.toFloat(),
+                currentProgress = avgSleep?.toFloat() ?: 0f,
                 targetProgress = 7.0f,
-                progressText = "${avgSleep}h / 7h média"
+                progressText = if (avgSleep != null) "${avgSleep}h / 7h média" else "Sem registros de sono"
             ),
             WeeklyMedal(
                 id = "semana_imparavel",

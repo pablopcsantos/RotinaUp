@@ -70,8 +70,8 @@ fun WeeklyReportScreen(
         root.put("adesaoGeralPercent", report.overallAdherence)
         root.put("nivelConsistencia", report.tier.name)
         root.put("nivelNumero", report.tier.levelNumber)
-        root.put("mediaSleepHours", report.avgSleepHours)
-        root.put("variacaoDormirHours", report.bedtimeVariationHours)
+        root.put("mediaSleepHours", report.avgSleepHours ?: JSONObject.NULL)
+        root.put("variacaoDormirHours", report.bedtimeVariationHours ?: JSONObject.NULL)
         root.put("contagemCochilos", report.napCount)
         root.put("sugestaoCircadiana", report.suggestion)
 
@@ -104,7 +104,8 @@ fun WeeklyReportScreen(
         sb.append("Período,\"$periodStr\"\n")
         sb.append("Adesão Geral (%),${report.overallAdherence}\n")
         sb.append("Nível Semanal,\"${report.tier.name}\"\n")
-        sb.append("Média de Sono (h),${report.avgSleepHours}\n")
+        sb.append("Média de Sono (h),${report.avgSleepHours ?: "Sem dados"}\n")
+        sb.append("Variação Horário Deitar (h),${report.bedtimeVariationHours?.let { "±$it" } ?: "Sem dados"}\n")
         sb.append("Contagem de Cochilos,${report.napCount}\n")
         sb.append("Sugestão,\"${report.suggestion.replace("\"", "\"\"")}\"\n\n")
 
@@ -520,13 +521,13 @@ fun WeeklyReportScreen(
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Icon(Icons.Default.Nightlight, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
                                 Spacer(modifier = Modifier.height(4.dp))
-                                Text("${report.avgSleepHours}h", fontWeight = FontWeight.Black, fontSize = 16.sp)
+                                Text(if (report.avgSleepHours != null) "${report.avgSleepHours}h" else "--", fontWeight = FontWeight.Black, fontSize = 16.sp)
                                 Text("Média de Sono", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Icon(Icons.Default.TrendingUp, contentDescription = null, tint = StatusPartial, modifier = Modifier.size(24.dp))
                                 Spacer(modifier = Modifier.height(4.dp))
-                                Text("${report.bedtimeVariationHours}h", fontWeight = FontWeight.Black, fontSize = 16.sp)
+                                Text(if (report.bedtimeVariationHours != null) "±${report.bedtimeVariationHours}h" else "--", fontWeight = FontWeight.Black, fontSize = 16.sp)
                                 Text("Variação Deitar", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {

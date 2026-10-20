@@ -52,7 +52,7 @@ class RotinaUpWidgetProvider : AppWidgetProvider() {
             views.setOnClickPendingIntent(R.id.widget_root, pendingIntent)
             views.setTextViewText(R.id.widget_title, "RotinaUp")
             views.setTextColor(R.id.widget_title, 0xFF38BDF8.toInt())
-            views.setTextViewText(R.id.widget_date, DateUtils.getNowTimeStr())
+            views.setTextViewText(R.id.widget_date, DateUtils.formatWidgetDate(DateUtils.getTodayDateString(0)))
             views.setTextColor(R.id.widget_date, 0xFF94A3B8.toInt())
             views.setTextColor(R.id.widget_more_text, 0xFF94A3B8.toInt())
 
@@ -126,7 +126,8 @@ class RotinaUpWidgetProvider : AppWidgetProvider() {
                     }
 
                     appWidgetManager.updateAppWidget(appWidgetId, views)
-                } catch (_: Throwable) {
+                } catch (t: Throwable) {
+                    android.util.Log.e("RotinaUpWidget", "Falha ao atualizar dados do widget", t)
                     appWidgetManager.updateAppWidget(appWidgetId, views)
                 }
             }

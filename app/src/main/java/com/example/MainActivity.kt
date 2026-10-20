@@ -111,7 +111,7 @@ fun RotinaUpApp(
     val isFromWidget = remember(intent) { intent?.getBooleanExtra("from_widget", false) == true }
 
     // State for PIN screen lock
-    var isUnlocked by remember { mutableStateOf(!settings.requireAuth || settings.pinCode.isNullOrBlank()) }
+    var isUnlocked by remember { mutableStateOf(!settings.requireAuth || !settings.hasPin()) }
 
     // Dialog & overlay states
     var activeFocusHabit by remember { mutableStateOf<Habito?>(null) }
@@ -172,9 +172,9 @@ fun RotinaUpApp(
     }
 
     // 1. PIN Lock Screen
-    if (!isUnlocked && settings.requireAuth && !settings.pinCode.isNullOrBlank()) {
+    if (!isUnlocked && settings.requireAuth && settings.hasPin()) {
         AuthPinLockScreen(
-            correctPin = settings.pinCode!!,
+            onVerifyPin = { entered -> viewModel.verifyPin(entered) },
             onSuccess = { isUnlocked = true }
         )
         return

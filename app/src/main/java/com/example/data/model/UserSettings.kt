@@ -12,7 +12,9 @@ data class UserSettings(
     val bedtimeTarget: String = "23:00",
     val wakeTarget: String = "07:00",
     val requireAuth: Boolean = false,
-    val pinCode: String? = null,
+    val pinCode: String? = null, // Kept nullable for backwards-compatible database migration
+    val pinHash: String? = null, // SHA-256 salted hash
+    val pinSalt: String? = null, // Hex-encoded cryptographic salt
     val themeMode: String = "light", // "light", "dark", "system"
     val lastBackupAt: Long? = null,
     val overdueRemindersEnabled: Boolean = true,
@@ -33,6 +35,10 @@ data class UserSettings(
     val mandatoryIntervalMinutes: Int = 15,
     val mandatoryAlarmSound: Boolean = true
 ) {
+    fun hasPin(): Boolean {
+        return !pinHash.isNullOrBlank() || !pinCode.isNullOrBlank()
+    }
+
     fun getCustomTypesList(): List<String> {
         return customHabitTypes.split("||")
             .map { it.trim() }

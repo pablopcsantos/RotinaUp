@@ -792,19 +792,19 @@ fun SettingsScreen(
                                 Column {
                                     Text("Proteção por Senha (PIN)", fontWeight = FontWeight.Bold, fontSize = 14.sp)
                                     Text(
-                                        if (settings.requireAuth && !settings.pinCode.isNullOrBlank()) "Proteção ativa (${settings.pinCode?.length} dígitos)" else "Desativada",
+                                        if (settings.requireAuth && settings.hasPin()) "Proteção ativa com PIN" else "Desativada",
                                         fontSize = 11.sp,
-                                        color = if (settings.requireAuth) StatusDone else MaterialTheme.colorScheme.onSurfaceVariant
+                                        color = if (settings.requireAuth && settings.hasPin()) StatusDone else MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
                             }
                             Switch(
-                                checked = settings.requireAuth,
+                                checked = settings.requireAuth && settings.hasPin(),
                                 onCheckedChange = { isChecked ->
                                     if (isChecked) {
                                         showPinDialog = true
                                     } else {
-                                        viewModel.updateSettings(settings.copy(requireAuth = false, pinCode = null))
+                                        viewModel.removePin()
                                     }
                                 }
                             )
@@ -1003,8 +1003,8 @@ fun SettingsScreen(
                 Button(
                     onClick = {
                         if (tempPin.length >= 4) {
-                            viewModel.updateSettings(settings.copy(requireAuth = true, pinCode = tempPin))
-                            viewModel.showToast("PIN configurado com sucesso!")
+                            viewModel.setPin(tempPin)
+                            viewModel.showToast("PIN configurado com segurança!")
                             showPinDialog = false
                             tempPin = ""
                         }

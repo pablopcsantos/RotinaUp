@@ -18,7 +18,7 @@ import com.example.data.model.*
         UserSettings::class,
         AlarmEvent::class
     ],
-    version = 5,
+    version = 6,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -29,6 +29,22 @@ abstract class AppDatabase : RoomDatabase() {
     companion object {
         @Volatile
         private var INSTANCE: AppDatabase? = null
+
+        val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS alarm_events (" +
+                    "id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                    "habitId INTEGER NOT NULL, " +
+                    "habitName TEXT NOT NULL, " +
+                    "scheduledAt INTEGER NOT NULL, " +
+                    "dismissedAt INTEGER NOT NULL, " +
+                    "dismissAttempts INTEGER NOT NULL, " +
+                    "snoozed INTEGER NOT NULL, " +
+                    "typedText TEXT NOT NULL)"
+                )
+            }
+        }
 
         val MIGRATION_2_3 = object : Migration(2, 3) {
             override fun migrate(db: SupportSQLiteDatabase) {
@@ -51,15 +67,26 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE user_settings ADD COLUMN pinHash TEXT")
+                db.execSQL("ALTER TABLE user_settings ADD COLUMN pinSalt TEXT")
+            }
+        }
+
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
                     AppDatabase::class.java,
                     "rotinaup.db"
-                ).addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
-                    .fallbackToDestructiveMigration()
-                    .build()
+                ).addMigrations(
+                    MIGRATION_1_2,
+                    MIGRATION_2_3,
+                    MIGRATION_3_4,
+                    MIGRATION_4_5,
+                    MIGRATION_5_6
+                ).build()
                 INSTANCE = instance
                 instance
             }
