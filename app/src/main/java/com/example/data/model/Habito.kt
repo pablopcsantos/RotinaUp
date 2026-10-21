@@ -48,6 +48,15 @@ data class Habito(
         val isoDay = DateUtils.getIsoDayOfWeek(dateStr)
         return isScheduledOn(isoDay)
     }
+
+    /**
+     * Checks if the habit is eligible on a given ISO date:
+     * Must not be prior to the habit's creation date AND must be scheduled on that date.
+     */
+    fun isEligibleOnDate(dateStr: String): Boolean {
+        val createdDateStr = DateUtils.formatTimestampToIso(createdAt)
+        return dateStr >= createdDateStr && isScheduledOnDate(dateStr)
+    }
 }
 
 typealias Habit = Habito

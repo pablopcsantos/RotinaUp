@@ -186,4 +186,32 @@ class WeeklyReportTest {
         assertNotNull(report.bedtimeVariationHours)
         assertTrue(report.bedtimeVariationHours!! > 0.0)
     }
+
+    @Test
+    fun `test habit with no scheduled days in window produces null rate and zero scheduled days`() {
+        val habitWithoutDays = Habit(
+            id = 40,
+            name = "Hábito Futuro",
+            type = "FOCUS",
+            targetTime = "14:00",
+            daysOfWeek = "", // empty
+            isActive = true,
+            createdAt = System.currentTimeMillis()
+        )
+
+        val report = viewModel.computeWeeklyReport(
+            habits = listOf(habitWithoutDays),
+            logs = emptyList(),
+            sleepLogs = emptyList(),
+            napLogs = emptyList(),
+            dailyReviews = emptyList()
+        )
+
+        assertEquals(1, report.habitMatrices.size)
+        val matrix = report.habitMatrices.first()
+        assertNull("Rate should be null when there are no scheduled days", matrix.rate)
+        assertEquals(0, matrix.scheduledDaysCount)
+        assertEquals(0, matrix.completedDaysCount)
+        assertEquals(0, report.overallAdherence)
+    }
 }

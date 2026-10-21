@@ -31,15 +31,16 @@ data class HabitWeeklyDayStatus(
     val date: String,
     val dayInitial: String,
     val status: String, // DONE, PARTIAL, SKIPPED, NONE
-    val isToday: Boolean
+    val isToday: Boolean,
+    val isEligible: Boolean = true
 )
 
 data class HabitWeeklyMatrix(
     val habit: Habit,
-    val rate: Int,
+    val rate: Int?,
     val days: List<HabitWeeklyDayStatus>,
     val completedDaysCount: Int,
-    val scheduledDaysCount: Int = 7
+    val scheduledDaysCount: Int
 )
 
 data class ConsequenceEvent(

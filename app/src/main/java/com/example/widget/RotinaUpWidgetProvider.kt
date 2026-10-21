@@ -22,7 +22,21 @@ class RotinaUpWidgetProvider : AppWidgetProvider() {
     override fun onReceive(context: Context, intent: Intent) {
         super.onReceive(context, intent)
         if (intent.action == ACTION_SYNC_WIDGET) {
-            updateAllWidgets(context)
+            val pendingResult = goAsync()
+            CoroutineScope(Dispatchers.IO).launch {
+                try {
+                    val appWidgetManager = AppWidgetManager.getInstance(context)
+                    val thisWidget = ComponentName(context, RotinaUpWidgetProvider::class.java)
+                    val allWidgetIds = appWidgetManager.getAppWidgetIds(thisWidget)
+                    for (id in allWidgetIds) {
+                        updateAppWidgetSync(context, appWidgetManager, id)
+                    }
+                } catch (t: Throwable) {
+                    android.util.Log.e("RotinaUpWidget", "Erro durante onReceive sync do widget", t)
+                } finally {
+                    pendingResult.finish()
+                }
+            }
         }
     }
 
@@ -85,6 +99,11 @@ class RotinaUpWidgetProvider : AppWidgetProvider() {
 
             try {
                 val db = AppDatabase.getDatabase(context)
+                val settings = kotlinx.coroutines.runBlocking {
+                    db.settingsDao().getSettings().firstOrNull()
+                }
+                val isLocked = settings?.requireAuth == true && settings.hasPin()
+
                 val allActiveHabits = kotlinx.coroutines.runBlocking {
                     db.habitDao().getAllActiveHabits().firstOrNull() ?: emptyList()
                 }
@@ -102,7 +121,7 @@ class RotinaUpWidgetProvider : AppWidgetProvider() {
 
                 habits.forEach { habit ->
                     val rowView = RemoteViews(context.packageName, R.layout.widget_habit_item)
-                    rowView.setTextViewText(R.id.habit_item_name, habit.name)
+                    rowView.setTextViewText(R.id.habit_item_name, if (isLocked) "Hábito Protegido" else habit.name)
                     rowView.setTextViewText(R.id.habit_item_time, habit.targetTime)
 
                     // Populate 7-day adherence dots
@@ -110,14 +129,13 @@ class RotinaUpWidgetProvider : AppWidgetProvider() {
                         if (dIdx < dotIds.size) {
                             val dotId = dotIds[dIdx]
                             val log = allLogs.find { it.habitId == habit.id && it.date == dateStr }
-                            val isoDay = DateUtils.getIsoDayOfWeek(dateStr)
-                            val isScheduled = habit.isScheduledOn(isoDay)
+                            val isEligible = habit.isEligibleOnDate(dateStr)
 
                             val dotDrawable = when {
                                 log?.status == "DONE" -> R.drawable.widget_dot_done
                                 log?.status == "PARTIAL" -> R.drawable.widget_dot_partial
                                 log?.status == "SKIPPED" -> R.drawable.widget_dot_missed
-                                !isScheduled -> R.drawable.widget_dot_empty
+                                !isEligible -> R.drawable.widget_dot_empty
                                 !isToday -> R.drawable.widget_dot_missed
                                 else -> R.drawable.widget_dot_empty
                             }

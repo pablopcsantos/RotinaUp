@@ -88,8 +88,8 @@ fun WeeklyReportScreen(
         report.habitMatrices.forEach { m ->
             val hObj = JSONObject()
             hObj.put("habito", m.habit.name)
-            hObj.put("taxaAdesaoPercent", m.rate)
-            hObj.put("diasConcluidos", "${m.completedDaysCount}/7")
+            hObj.put("taxaAdesaoPercent", m.rate ?: JSONObject.NULL)
+            hObj.put("diasConcluidos", "${m.completedDaysCount}/${m.scheduledDaysCount}")
             habArray.put(hObj)
         }
         root.put("matrizHabitos", habArray)
@@ -107,20 +107,31 @@ fun WeeklyReportScreen(
         copyToClipboard("Relatório Semanal (JSON)", root.toString(2))
     }
 
+    fun sanitizeCsv(value: String): String {
+        val trimmed = value.trim()
+        val safe = if (trimmed.startsWith("=") || trimmed.startsWith("+") || trimmed.startsWith("-") || trimmed.startsWith("@")) {
+            "'$trimmed"
+        } else {
+            trimmed
+        }
+        return safe.replace("\"", "\"\"")
+    }
+
     fun exportCsv() {
         val sb = StringBuilder()
         sb.append("Métrica,Valor\n")
-        sb.append("Período,\"$periodStr\"\n")
+        sb.append("Período,\"${sanitizeCsv(periodStr)}\"\n")
         sb.append("Adesão Geral (%),${report.overallAdherence}\n")
-        sb.append("Nível Semanal,\"${report.tier.name}\"\n")
+        sb.append("Nível Semanal,\"${sanitizeCsv(report.tier.name)}\"\n")
         sb.append("Média de Sono (h),${report.avgSleepHours ?: "Sem dados"}\n")
         sb.append("Variação Horário Deitar (h),${report.bedtimeVariationHours?.let { "±$it" } ?: "Sem dados"}\n")
         sb.append("Contagem de Cochilos,${report.napCount}\n")
-        sb.append("Sugestão,\"${report.suggestion.replace("\"", "\"\"")}\"\n\n")
+        sb.append("Sugestão,\"${sanitizeCsv(report.suggestion)}\"\n\n")
 
         sb.append("Hábito,Adesão (%),Dias Concluídos\n")
         report.habitMatrices.forEach { m ->
-            sb.append("\"${m.habit.name.replace("\"", "\"\"")}\",${m.rate},${m.completedDaysCount}/7\n")
+            val rateStr = m.rate?.let { "$it" } ?: "N/A"
+            sb.append("\"${sanitizeCsv(m.habit.name)}\",$rateStr,${m.completedDaysCount}/${m.scheduledDaysCount}\n")
         }
 
         copyToClipboard("Relatório Semanal (CSV)", sb.toString())
@@ -435,17 +446,27 @@ fun WeeklyReportScreen(
                                         ) {
                                             Text(m.habit.name, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                                Text("${m.completedDaysCount}/7 dias", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                Text(
+                                                    text = if (m.scheduledDaysCount > 0) "${m.completedDaysCount}/${m.scheduledDaysCount} dias" else "${m.completedDaysCount} dias",
+                                                    fontSize = 11.sp,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
                                                 Spacer(modifier = Modifier.width(6.dp))
+                                                val hasRate = m.rate != null && m.scheduledDaysCount > 0
+                                                val badgeColor = when {
+                                                    !hasRate -> MaterialTheme.colorScheme.outline
+                                                    m.rate!! >= 70 -> StatusDone
+                                                    else -> StatusPartial
+                                                }
                                                 Surface(
                                                     shape = RoundedCornerShape(6.dp),
-                                                    color = if (m.rate >= 70) StatusDone.copy(alpha = 0.15f) else StatusPartial.copy(alpha = 0.15f)
+                                                    color = badgeColor.copy(alpha = 0.15f)
                                                 ) {
                                                     Text(
-                                                        text = "${m.rate}%",
+                                                        text = if (hasRate) "${m.rate}%" else "N/A",
                                                         fontSize = 11.sp,
                                                         fontWeight = FontWeight.Black,
-                                                        color = if (m.rate >= 70) StatusDone else StatusPartial,
+                                                        color = badgeColor,
                                                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                                     )
                                                 }
@@ -456,9 +477,9 @@ fun WeeklyReportScreen(
 
                                         // 7 Dots Row
                                         Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.CenterVertically
+                                             modifier = Modifier.fillMaxWidth(),
+                                             horizontalArrangement = Arrangement.SpaceBetween,
+                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             Text("Dias:", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -471,6 +492,7 @@ fun WeeklyReportScreen(
                                                         isDone -> StatusDone
                                                         isPartial -> StatusPartial
                                                         isSkipped -> StatusSkipped
+                                                        !d.isEligible -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
                                                         else -> MaterialTheme.colorScheme.surfaceVariant
                                                     }
 

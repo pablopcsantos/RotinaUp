@@ -498,12 +498,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         val matrices = activeHabitsList.map { habit ->
             val hLogs = weeklyLogs.filter { it.habitId == habit.id }
-            val createdDateStr = DateUtils.formatTimestampToIso(habit.createdAt)
 
             // Strictly eligible scheduled dates: not before habit creation, and scheduled for that day
-            val eligibleScheduledDates = dates.filter { dStr ->
-                dStr >= createdDateStr && habit.isScheduledOnDate(dStr)
-            }
+            val eligibleScheduledDates = dates.filter { dStr -> habit.isEligibleOnDate(dStr) }
             val scheduledDays = eligibleScheduledDates.size
 
             // Numerator strictly counts completions on eligible scheduled dates
@@ -515,7 +512,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val rate = if (scheduledDays > 0) {
                 ((weighted / scheduledDays) * 100f).toInt().coerceIn(0, 100)
             } else {
-                100 // No scheduled days in this week window
+                null // No scheduled days in this week window
             }
 
             if (scheduledDays > 0) {
@@ -529,7 +526,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     date = dStr,
                     dayInitial = DateUtils.getDayInitial(dStr),
                     status = log?.status ?: "NONE",
-                    isToday = dStr == dates.last()
+                    isToday = dStr == dates.last(),
+                    isEligible = habit.isEligibleOnDate(dStr)
                 )
             }
 
@@ -537,7 +535,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 habit = habit,
                 rate = rate,
                 days = dayStatuses,
-                completedDaysCount = done
+                completedDaysCount = done,
+                scheduledDaysCount = scheduledDays
             )
         }
 
@@ -667,22 +666,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 if (d.status == "DONE") {
                     current++
                     if (current > maxGreenStreak) maxGreenStreak = current
-                } else {
+                } else if (d.isEligible && d.status != "NONE") {
+                    // Only an eligible scheduled day where the habit was missed/skipped resets the streak
                     current = 0
                 }
             }
         }
 
-        val wakeHabit = activeHabitsList.find { it.name.contains("despertar", ignoreCase = true) }
+        val wakeHabit = activeHabitsList.find { it.type == "SLEEP" || it.name.contains("despertar", ignoreCase = true) }
         val wakeDoneCount = if (wakeHabit != null) weeklyLogs.count { it.habitId == wakeHabit.id && it.status == "DONE" } else 0
 
         val noNapHabit = activeHabitsList.find { it.name.contains("cochilo", ignoreCase = true) }
         val noNapDoneCount = if (noNapHabit != null) weeklyLogs.count { it.habitId == noNapHabit.id && it.status == "DONE" } else 0
 
-        val waterHabit = activeHabitsList.find { it.name.contains("hidrata", ignoreCase = true) }
+        val waterHabit = activeHabitsList.find { it.type == "WATER" || it.name.contains("hidrata", ignoreCase = true) || it.name.contains("água", ignoreCase = true) }
         val waterDoneCount = if (waterHabit != null) weeklyLogs.count { it.habitId == waterHabit.id && it.status == "DONE" } else 0
 
-        val focusHabits = activeHabitsList.filter { it.type == "FOCUS" }
+        val focusHabits = activeHabitsList.filter { it.type == "FOCUS" && !it.name.contains("cochilo", ignoreCase = true) }
         val focusSkips = weeklyLogs.count { l -> focusHabits.any { it.id == l.habitId } && l.status == "SKIPPED" }
         val reviewsInWeek = dailyReviews.count { dates.contains(it.date) }
 
