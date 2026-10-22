@@ -106,4 +106,85 @@ class DatabaseOperationsTest {
         assertFalse(weekdaysHabit.isScheduledOn(6)) // Saturday
         assertFalse(weekdaysHabit.isScheduledOn(7)) // Sunday
     }
+
+    @Test
+    fun `test all database migrations execute cleanly and preserve schemas`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val helper = androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory()
+            .create(
+                androidx.sqlite.db.SupportSQLiteOpenHelper.Configuration.builder(context)
+                    .name(null) // in-memory SQLite database
+                    .callback(object : androidx.sqlite.db.SupportSQLiteOpenHelper.Callback(1) {
+                        override fun onCreate(sDb: androidx.sqlite.db.SupportSQLiteDatabase) {
+                            // Version 1 tables
+                            sDb.execSQL("CREATE TABLE IF NOT EXISTS habitos (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, name TEXT NOT NULL, type TEXT NOT NULL, targetTime TEXT NOT NULL, daysOfWeek TEXT NOT NULL, durationMinutes INTEGER NOT NULL, streakCount INTEGER NOT NULL, reminderSound TEXT NOT NULL, ringDurationMinutes INTEGER NOT NULL, dismissPhrase TEXT NOT NULL, isActive INTEGER NOT NULL, positiveConsequence TEXT NOT NULL, negativeConsequence TEXT NOT NULL, lastCompletedDate TEXT, createdAt INTEGER NOT NULL, updatedAt INTEGER NOT NULL)")
+                            sDb.execSQL("CREATE TABLE IF NOT EXISTS user_settings (id INTEGER PRIMARY KEY NOT NULL, notificationsEnabled INTEGER NOT NULL, sleepGoalMinutes INTEGER NOT NULL, bedtimeTarget TEXT NOT NULL, wakeTarget TEXT NOT NULL, requireAuth INTEGER NOT NULL, pinCode TEXT, themeMode TEXT NOT NULL, lastBackupAt INTEGER, overdueRemindersEnabled INTEGER NOT NULL, overdueIntervalMinutes INTEGER NOT NULL, overdueAlarmSound INTEGER NOT NULL, isDummyActive INTEGER NOT NULL, hasSeenDummyPrompt INTEGER NOT NULL, typeSleepName TEXT NOT NULL, typeFocusName TEXT NOT NULL, typeExerciseName TEXT NOT NULL, typeWaterName TEXT NOT NULL, typeCustomName TEXT NOT NULL)")
+                        }
+                        override fun onUpgrade(sDb: androidx.sqlite.db.SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) {}
+                    })
+                    .build()
+            )
+        val sDb = helper.writableDatabase
+
+        // Test Migration 1 -> 2
+        AppDatabase.MIGRATION_1_2.migrate(sDb)
+        val c1 = sDb.query("SELECT name FROM sqlite_master WHERE type='table' AND name='alarm_events'")
+        assertTrue("alarm_events table must exist after MIGRATION_1_2", c1.moveToFirst())
+        c1.close()
+
+        // Test Migration 2 -> 3
+        AppDatabase.MIGRATION_2_3.migrate(sDb)
+        val c2 = sDb.query("PRAGMA table_info(habitos)")
+        var hasShowInWidget = false
+        while (c2.moveToNext()) {
+            if (c2.getString(1) == "showInWidget") hasShowInWidget = true
+        }
+        c2.close()
+        assertTrue("habitos must have showInWidget column after MIGRATION_2_3", hasShowInWidget)
+
+        // Test Migration 3 -> 4
+        AppDatabase.MIGRATION_3_4.migrate(sDb)
+        val c3 = sDb.query("PRAGMA table_info(user_settings)")
+        var hasCustomHabitTypes = false
+        while (c3.moveToNext()) {
+            if (c3.getString(1) == "customHabitTypes") hasCustomHabitTypes = true
+        }
+        c3.close()
+        assertTrue("user_settings must have customHabitTypes after MIGRATION_3_4", hasCustomHabitTypes)
+
+        // Test Migration 4 -> 5
+        AppDatabase.MIGRATION_4_5.migrate(sDb)
+        val c4 = sDb.query("PRAGMA table_info(user_settings)")
+        var hasMandatoryReminders = false
+        while (c4.moveToNext()) {
+            if (c4.getString(1) == "mandatoryRemindersEnabled") hasMandatoryReminders = true
+        }
+        c4.close()
+        assertTrue("user_settings must have mandatoryRemindersEnabled after MIGRATION_4_5", hasMandatoryReminders)
+
+        // Test Migration 5 -> 6
+        AppDatabase.MIGRATION_5_6.migrate(sDb)
+        val c5 = sDb.query("PRAGMA table_info(user_settings)")
+        var hasPinHash = false
+        var hasPinSalt = false
+        while (c5.moveToNext()) {
+            val col = c5.getString(1)
+            if (col == "pinHash") hasPinHash = true
+            if (col == "pinSalt") hasPinSalt = true
+        }
+        c5.close()
+        assertTrue("user_settings must have pinHash and pinSalt after MIGRATION_5_6", hasPinHash && hasPinSalt)
+
+        // Test Migration 6 -> 7
+        AppDatabase.MIGRATION_6_7.migrate(sDb)
+        val c6 = sDb.query("PRAGMA table_info(user_settings)")
+        var hasSeeded = false
+        while (c6.moveToNext()) {
+            if (c6.getString(1) == "hasSeededInitialData") hasSeeded = true
+        }
+        c6.close()
+        assertTrue("user_settings must have hasSeededInitialData after MIGRATION_6_7", hasSeeded)
+
+        sDb.close()
+    }
 }

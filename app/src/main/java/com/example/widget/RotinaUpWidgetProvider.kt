@@ -29,7 +29,7 @@ class RotinaUpWidgetProvider : AppWidgetProvider() {
                     val thisWidget = ComponentName(context, RotinaUpWidgetProvider::class.java)
                     val allWidgetIds = appWidgetManager.getAppWidgetIds(thisWidget)
                     for (id in allWidgetIds) {
-                        updateAppWidgetSync(context, appWidgetManager, id)
+                        updateAppWidget(context, appWidgetManager, id)
                     }
                 } catch (t: Throwable) {
                     android.util.Log.e("RotinaUpWidget", "Erro durante onReceive sync do widget", t)
@@ -49,7 +49,7 @@ class RotinaUpWidgetProvider : AppWidgetProvider() {
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 for (appWidgetId in appWidgetIds) {
-                    updateAppWidgetSync(context, appWidgetManager, appWidgetId)
+                    updateAppWidget(context, appWidgetManager, appWidgetId)
                 }
             } catch (t: Throwable) {
                 android.util.Log.e("RotinaUpWidget", "Erro durante onUpdate do widget", t)
@@ -60,7 +60,7 @@ class RotinaUpWidgetProvider : AppWidgetProvider() {
     }
 
     companion object {
-        fun updateAppWidgetSync(
+        suspend fun updateAppWidget(
             context: Context,
             appWidgetManager: AppWidgetManager,
             appWidgetId: Int
@@ -99,18 +99,12 @@ class RotinaUpWidgetProvider : AppWidgetProvider() {
 
             try {
                 val db = AppDatabase.getDatabase(context)
-                val settings = kotlinx.coroutines.runBlocking {
-                    db.settingsDao().getSettings().firstOrNull()
-                }
+                val settings = db.settingsDao().getSettings().firstOrNull()
                 val isLocked = settings?.requireAuth == true && settings.hasPin()
 
-                val allActiveHabits = kotlinx.coroutines.runBlocking {
-                    db.habitDao().getAllActiveHabits().firstOrNull() ?: emptyList()
-                }
+                val allActiveHabits = db.habitDao().getAllActiveHabits().firstOrNull() ?: emptyList()
                 val habits = allActiveHabits.filter { it.showInWidget }.sortedBy { it.targetTime }
-                val allLogs = kotlinx.coroutines.runBlocking {
-                    db.habitDao().getAllLogs().firstOrNull() ?: emptyList()
-                }
+                val allLogs = db.habitDao().getAllLogs().firstOrNull() ?: emptyList()
 
                 views.removeAllViews(R.id.widget_habits_container)
 
@@ -182,6 +176,16 @@ class RotinaUpWidgetProvider : AppWidgetProvider() {
             }
         }
 
+        fun updateAppWidgetSync(
+            context: Context,
+            appWidgetManager: AppWidgetManager,
+            appWidgetId: Int
+        ) {
+            kotlinx.coroutines.runBlocking(Dispatchers.IO) {
+                updateAppWidget(context, appWidgetManager, appWidgetId)
+            }
+        }
+
         const val ACTION_SYNC_WIDGET = "com.example.ACTION_SYNC_WIDGET"
 
         fun updateAllWidgets(context: Context) {
@@ -191,7 +195,7 @@ class RotinaUpWidgetProvider : AppWidgetProvider() {
                     val thisWidget = ComponentName(context, RotinaUpWidgetProvider::class.java)
                     val allWidgetIds = appWidgetManager.getAppWidgetIds(thisWidget)
                     for (id in allWidgetIds) {
-                        updateAppWidgetSync(context, appWidgetManager, id)
+                        updateAppWidget(context, appWidgetManager, id)
                     }
                 } catch (t: Throwable) {
                     android.util.Log.e("RotinaUpWidget", "Erro ao disparar updateAllWidgets", t)

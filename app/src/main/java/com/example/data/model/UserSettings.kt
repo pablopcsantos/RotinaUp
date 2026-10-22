@@ -12,9 +12,9 @@ data class UserSettings(
     val bedtimeTarget: String = "23:00",
     val wakeTarget: String = "07:00",
     val requireAuth: Boolean = false,
-    val pinCode: String? = null, // Kept nullable for backwards-compatible database migration
-    val pinHash: String? = null, // SHA-256 salted hash
-    val pinSalt: String? = null, // Hex-encoded cryptographic salt
+    val pinCode: String? = null, // Kept nullable for backwards-compatible migration; cleared upon PBKDF2 upgrade
+    val pinHash: String? = null, // PBKDF2WithHmacSHA256 salted hash (format: PBKDF2$<iterations>$<hexKey>, 100,000 iterations); supports legacy SHA-256 for migration
+    val pinSalt: String? = null, // Hex-encoded 16-byte cryptographically secure salt
     val themeMode: String = "light", // "light", "dark", "system"
     val lastBackupAt: Long? = null,
     val overdueRemindersEnabled: Boolean = true,
