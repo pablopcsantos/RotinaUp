@@ -647,19 +647,26 @@ object BackupManager {
                     val settingsDao = db.settingsDao()
                     val localHabits = (habitDao.getAllHabits().firstOrNull() ?: emptyList()).toMutableList()
                     val importedHabitIds = mutableMapOf<Long, Long>()
+                    // One local habit may match at most one imported habit. This avoids
+                    // collapsing separate habits that happen to share the same name/type.
+                    val matchedLocalHabitIds = mutableSetOf<Long>()
 
                     payload.habits.forEach { imported ->
                         val matching = localHabits.firstOrNull {
-                            it.name.equals(imported.name, ignoreCase = true) && it.type == imported.type
+                            it.id !in matchedLocalHabitIds &&
+                                it.name.equals(imported.name, ignoreCase = true) &&
+                                it.type == imported.type
                         }
                         if (matching != null) {
                             importedHabitIds[imported.id] = matching.id
+                            matchedLocalHabitIds.add(matching.id)
                         } else {
                             val now = System.currentTimeMillis()
                             val newId = habitDao.insertHabit(
                                 imported.copy(id = 0L, createdAt = now, updatedAt = now)
                             )
                             importedHabitIds[imported.id] = newId
+                            matchedLocalHabitIds.add(newId)
                             localHabits.add(imported.copy(id = newId, createdAt = now, updatedAt = now))
                         }
                     }
