@@ -141,10 +141,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val current = settingsDao.getSettings().firstOrNull()
             if (current == null || !current.hasSeededInitialData) {
                 seedInitialData()
-            } else if (!current.pinCode.isNullOrBlank()) {
+            } else if (com.example.util.SecurityUtils.needsUpgrade(current)) {
                 // Auto-migrate any legacy plain-text PIN immediately to salted PBKDF2 hash
-                val upgraded = com.example.util.SecurityUtils.createHashedSettings(current.pinCode, current)
-                settingsDao.insertOrUpdateSettings(upgraded)
+                if (!current.pinCode.isNullOrBlank()) {
+                    val upgraded = com.example.util.SecurityUtils.createHashedSettings(current.pinCode, current)
+                    settingsDao.insertOrUpdateSettings(upgraded)
+                }
             }
             com.example.util.AlarmScheduler.rescheduleAllAlarms(getApplication())
         }
@@ -399,8 +401,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (isValid) {
             com.example.util.SecurityUtils.resetFailedAttempts(getApplication())
             unlockSession()
-            // Upgrade legacy plain-text pinCode or legacy SHA-256 to modern PBKDF2
-            val isLegacy = !current.pinCode.isNullOrBlank() || (current.pinHash?.startsWith("PBKDF2$") != true)
+            // Upgrade legacy plain-text pinCode or legacy SHA-256 / outdated PBKDF2 iterations to modern PBKDF2
+            val isLegacy = com.example.util.SecurityUtils.needsUpgrade(current)
             if (isLegacy) {
                 viewModelScope.launch {
                     val upgraded = com.example.util.SecurityUtils.createHashedSettings(enteredPin, current)
@@ -674,16 +676,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         val wakeHabit = activeHabitsList.find { it.type == "SLEEP" || it.name.contains("despertar", ignoreCase = true) }
-        val wakeDoneCount = if (wakeHabit != null) weeklyLogs.count { it.habitId == wakeHabit.id && it.status == "DONE" } else 0
+        val wakeDoneCount = if (wakeHabit != null) weeklyLogs.count { it.habitId == wakeHabit.id && it.status == "DONE" && wakeHabit.isEligibleOnDate(it.date) } else 0
 
         val noNapHabit = activeHabitsList.find { it.name.contains("cochilo", ignoreCase = true) }
-        val noNapDoneCount = if (noNapHabit != null) weeklyLogs.count { it.habitId == noNapHabit.id && it.status == "DONE" } else 0
+        val noNapDoneCount = if (noNapHabit != null) weeklyLogs.count { it.habitId == noNapHabit.id && it.status == "DONE" && noNapHabit.isEligibleOnDate(it.date) } else 0
 
         val waterHabit = activeHabitsList.find { it.type == "WATER" || it.name.contains("hidrata", ignoreCase = true) || it.name.contains("água", ignoreCase = true) }
-        val waterDoneCount = if (waterHabit != null) weeklyLogs.count { it.habitId == waterHabit.id && it.status == "DONE" } else 0
+        val waterDoneCount = if (waterHabit != null) weeklyLogs.count { it.habitId == waterHabit.id && it.status == "DONE" && waterHabit.isEligibleOnDate(it.date) } else 0
 
         val focusHabits = activeHabitsList.filter { it.type == "FOCUS" && !it.name.contains("cochilo", ignoreCase = true) }
-        val focusSkips = weeklyLogs.count { l -> focusHabits.any { it.id == l.habitId } && l.status == "SKIPPED" }
+        val focusSkips = weeklyLogs.count { l -> focusHabits.any { it.id == l.habitId && it.isEligibleOnDate(l.date) } && l.status == "SKIPPED" }
+        val focusDoneCount = weeklyLogs.count { l -> focusHabits.any { it.id == l.habitId && it.isEligibleOnDate(l.date) } && l.status == "DONE" }
         val reviewsInWeek = dailyReviews.count { dates.contains(it.date) }
 
         val medals = listOf(
@@ -721,12 +724,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 title = "Transformação Verde",
                 category = "consistencia",
                 icon = "🟢",
-                unlocked = maxGreenStreak >= 5,
+                unlocked = hasEnoughData && maxGreenStreak >= 5,
                 description = "Sequência consistente de bolinhas verdes consecutivas em um hábito.",
                 requirement = "≥ 5 bolinhas verdes consecutivas",
                 currentProgress = maxGreenStreak.toFloat(),
                 targetProgress = 5f,
-                progressText = "$maxGreenStreak de 5 dias seguidos"
+                progressText = if (hasEnoughData) "$maxGreenStreak de 5 dias seguidos" else "Dados insuficientes"
             ),
             WeeklyMedal(
                 id = "despertar_vitorioso",
@@ -745,15 +748,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 title = "Foco Inabalável",
                 category = "foco",
                 icon = "🎯",
-                unlocked = focusHabits.isNotEmpty() && weeklyLogs.count { l -> focusHabits.any { it.id == l.habitId } && l.status == "DONE" } >= 3 && focusSkips == 0,
+                unlocked = focusHabits.isNotEmpty() && focusDoneCount >= 3 && focusSkips == 0,
                 description = "Cumpriu blocos de foco sem nenhuma falta ou adiamento na semana.",
                 requirement = "≥ 3 blocos concluídos e zero faltas",
-                currentProgress = if (focusSkips == 0 && weeklyLogs.count { l -> focusHabits.any { it.id == l.habitId } && l.status == "DONE" } >= 3) 1f else 0f,
+                currentProgress = if (focusSkips == 0 && focusDoneCount >= 3) 1f else 0f,
                 targetProgress = 1f,
                 progressText = run {
-                    val done = weeklyLogs.count { l -> focusHabits.any { it.id == l.habitId } && l.status == "DONE" }
-                    if (done == 0 && focusSkips == 0) "Nenhum bloco registrado"
-                    else if (focusSkips == 0) "$done concluídos (0 pulados)"
+                    if (focusDoneCount == 0 && focusSkips == 0) "Nenhum bloco registrado"
+                    else if (focusSkips == 0) "$focusDoneCount concluídos (0 pulados)"
                     else "$focusSkips pulados"
                 }
             ),
@@ -808,7 +810,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         )
 
         return WeeklyReportData(
-            hasEnoughData = daysWithData >= 5,
+            hasEnoughData = hasEnoughData,
             daysCount = daysWithData,
             overallAdherence = overallAdherence,
             habitMatrices = matrices,

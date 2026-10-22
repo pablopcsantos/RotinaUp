@@ -30,11 +30,11 @@ class SecurityUtilsTest {
         val hash = SecurityUtils.hashPinPbkdf2(pin, salt)
 
         assertNotNull(hash)
-        assertTrue("Hash must follow PBKDF2 format", hash.startsWith("PBKDF2$10000$"))
+        assertTrue("Hash must follow PBKDF2 format", hash.startsWith("PBKDF2$100000$"))
         val parts = hash.split("$")
         assertEquals(3, parts.size)
         assertEquals("PBKDF2", parts[0])
-        assertEquals("10000", parts[1])
+        assertEquals("100000", parts[1])
         assertTrue("Key length must be at least 64 hex characters (256 bits)", parts[2].length >= 64)
     }
 
@@ -58,6 +58,70 @@ class SecurityUtilsTest {
         assertFalse(SecurityUtils.verifyPin("0000", securedSettings))
         assertFalse(SecurityUtils.verifyPin("432", securedSettings))
         assertFalse(SecurityUtils.verifyPin("", securedSettings))
+    }
+
+    @Test
+    fun `test verifyPin bounds checking on iteration counts`() {
+        val salt = SecurityUtils.generateSalt()
+
+        // Below minimum safe iterations (e.g., 500 < 1000)
+        val lowIterationSettings = UserSettings(
+            requireAuth = true,
+            pinHash = "PBKDF2\$500\$somefakehashthatissufficientlylong0123456789abcdef0123456789abcdef",
+            pinSalt = salt
+        )
+        assertFalse(SecurityUtils.verifyPin("1234", lowIterationSettings))
+
+        // Above maximum safe iterations (e.g., 1000000 > 500000)
+        val highIterationSettings = UserSettings(
+            requireAuth = true,
+            pinHash = "PBKDF2\$1000000\$somefakehashthatissufficientlylong0123456789abcdef0123456789abcdef",
+            pinSalt = salt
+        )
+        assertFalse(SecurityUtils.verifyPin("1234", highIterationSettings))
+
+        // Valid custom safe iteration count (e.g. 5000)
+        val customIterations = 5000
+        val customHash = SecurityUtils.hashPinPbkdf2("1234", salt, customIterations)
+        val validCustomSettings = UserSettings(
+            requireAuth = true,
+            pinHash = customHash,
+            pinSalt = salt
+        )
+        assertTrue(SecurityUtils.verifyPin("1234", validCustomSettings))
+    }
+
+    @Test
+    fun `test needsUpgrade detection for legacy credentials`() {
+        // Plain text PIN requires upgrade
+        val plainTextSettings = UserSettings(requireAuth = true, pinCode = "1234")
+        assertTrue(SecurityUtils.needsUpgrade(plainTextSettings))
+
+        // Legacy SHA-256 requires upgrade
+        val sha256Settings = UserSettings(
+            requireAuth = true,
+            pinHash = SecurityUtils.hashPinSha256("1234", "somesalt"),
+            pinSalt = "somesalt"
+        )
+        assertTrue(SecurityUtils.needsUpgrade(sha256Settings))
+
+        // Outdated 10k PBKDF2 requires upgrade to 100k
+        val oldPbkdf2Hash = SecurityUtils.hashPinPbkdf2("1234", "somesalt", 10000)
+        val oldPbkdf2Settings = UserSettings(
+            requireAuth = true,
+            pinHash = oldPbkdf2Hash,
+            pinSalt = "somesalt"
+        )
+        assertTrue(SecurityUtils.needsUpgrade(oldPbkdf2Settings))
+
+        // Modern 100k PBKDF2 does not need upgrade
+        val modernHash = SecurityUtils.hashPinPbkdf2("1234", "somesalt", 100000)
+        val modernSettings = UserSettings(
+            requireAuth = true,
+            pinHash = modernHash,
+            pinSalt = "somesalt"
+        )
+        assertFalse(SecurityUtils.needsUpgrade(modernSettings))
     }
 
     @Test

@@ -214,4 +214,88 @@ class WeeklyReportTest {
         assertEquals(0, matrix.completedDaysCount)
         assertEquals(0, report.overallAdherence)
     }
+
+    @Test
+    fun `test hasEnoughData requires habits and scheduled checks and is consistent in report return`() {
+        val dates = (6 downTo 0).map { DateUtils.getTodayDateString(-it) }
+        // 5 days of sleep logs, but NO active habits
+        val sleepLogs = (0..4).map { idx ->
+            SleepLog(
+                date = dates[idx],
+                bedtimeStr = "23:00",
+                wakeTimeStr = "07:00",
+                durationMinutes = 480
+            )
+        }
+
+        val reportWithoutHabits = viewModel.computeWeeklyReport(
+            habits = emptyList(),
+            logs = emptyList(),
+            sleepLogs = sleepLogs,
+            napLogs = emptyList(),
+            dailyReviews = emptyList()
+        )
+        // Even though daysCount == 5, hasEnoughData must be false because there are no active habits or scheduled checks
+        assertEquals(5, reportWithoutHabits.daysCount)
+        assertFalse(reportWithoutHabits.hasEnoughData)
+
+        // Now with active habit scheduled 7 days and 5 days logged
+        val habit = Habit(
+            id = 50,
+            name = "Meditação",
+            type = "FOCUS",
+            targetTime = "07:30",
+            daysOfWeek = "1,2,3,4,5,6,7",
+            isActive = true,
+            createdAt = System.currentTimeMillis() - (10L * 24 * 3600 * 1000)
+        )
+        val logs = (0..4).map { idx ->
+            HabitLog(habitId = 50, date = dates[idx], status = "DONE")
+        }
+
+        val reportWithHabits = viewModel.computeWeeklyReport(
+            habits = listOf(habit),
+            logs = logs,
+            sleepLogs = sleepLogs,
+            napLogs = emptyList(),
+            dailyReviews = emptyList()
+        )
+        assertTrue(reportWithHabits.hasEnoughData)
+    }
+
+    @Test
+    fun `test medals evaluate only scheduled eligible days`() {
+        val dates = (6 downTo 0).map { DateUtils.getTodayDateString(-it) }
+        val todayIso = DateUtils.getIsoDayOfWeek(dates.last())
+
+        // Wake habit scheduled ONLY 1 day a week (today)
+        val wakeHabit = Habit(
+            id = 60,
+            name = "Despertar com Luz Natural",
+            type = "SLEEP",
+            targetTime = "06:30",
+            daysOfWeek = "$todayIso",
+            isActive = true,
+            createdAt = System.currentTimeMillis() - (10L * 24 * 3600 * 1000)
+        )
+
+        // 5 DONE logs, but 4 are on unscheduled days
+        val logs = (0..4).map { idx ->
+            HabitLog(habitId = 60, date = dates[idx], status = "DONE")
+        }
+
+        val report = viewModel.computeWeeklyReport(
+            habits = listOf(wakeHabit),
+            logs = logs,
+            sleepLogs = emptyList(),
+            napLogs = emptyList(),
+            dailyReviews = emptyList()
+        )
+
+        val wakeMedal = report.medals.find { it.id == "despertar_vitorioso" }
+        assertNotNull(wakeMedal)
+        assertFalse("Medal must not unlock when completions are on unscheduled days", wakeMedal!!.unlocked)
+        // Since only the last day (if matches) is eligible, current progress is < 5
+        assertTrue(wakeMedal.currentProgress < 5f)
+    }
 }

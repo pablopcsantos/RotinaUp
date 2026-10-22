@@ -9,8 +9,10 @@ import javax.crypto.spec.PBEKeySpec
 
 object SecurityUtils {
 
-    private const val PBKDF2_ALGORITHM = "PBKDF2WithHmacSHA256"
-    private const val PBKDF2_ITERATIONS = 10000
+    const val PBKDF2_ALGORITHM = "PBKDF2WithHmacSHA256"
+    const val PBKDF2_ITERATIONS = 100000
+    const val MIN_SAFE_ITERATIONS = 1000
+    const val MAX_SAFE_ITERATIONS = 500000
     private const val KEY_LENGTH = 256
     private const val PREFS_NAME = "rotinaup_security_prefs"
     private const val PREF_FAILED_ATTEMPTS = "failed_pin_attempts"
@@ -29,15 +31,16 @@ object SecurityUtils {
     }
 
     /**
-     * Hashes the given PIN using PBKDF2WithHmacSHA256 with 10,000 iterations and salt.
-     * Output format: PBKDF2$10000$<hexEncodedKey>
+     * Hashes the given PIN using PBKDF2WithHmacSHA256 with 100,000 iterations and salt.
+     * Output format: PBKDF2$<iterations>$<hexEncodedKey>
      */
     fun hashPinPbkdf2(pin: String, salt: String, iterations: Int = PBKDF2_ITERATIONS): String {
-        val spec = PBEKeySpec(pin.toCharArray(), salt.toByteArray(Charsets.UTF_8), iterations, KEY_LENGTH)
+        val safeIterations = iterations.coerceIn(MIN_SAFE_ITERATIONS, MAX_SAFE_ITERATIONS)
+        val spec = PBEKeySpec(pin.toCharArray(), salt.toByteArray(Charsets.UTF_8), safeIterations, KEY_LENGTH)
         val factory = SecretKeyFactory.getInstance(PBKDF2_ALGORITHM)
         val hashBytes = factory.generateSecret(spec).encoded
         val hex = hashBytes.joinToString("") { "%02x".format(it) }
-        return "PBKDF2\$$iterations\$$hex"
+        return "PBKDF2\$$safeIterations\$$hex"
     }
 
     /**
@@ -53,7 +56,7 @@ object SecurityUtils {
     /**
      * Verifies an entered PIN against stored hashed credentials.
      * Uses constant-time comparison to prevent timing attacks.
-     * Supports automatic upgrade from legacy SHA-256 or plain-text.
+     * Validates iteration parameters within safe operational bounds.
      */
     fun verifyPin(enteredPin: String, settings: UserSettings): Boolean {
         val storedHash = settings.pinHash
@@ -62,9 +65,16 @@ object SecurityUtils {
         // Modern: PBKDF2 salted derivation
         if (!storedHash.isNullOrBlank() && storedHash.startsWith("PBKDF2$") && !salt.isNullOrBlank()) {
             val parts = storedHash.split("$")
-            val iterations = parts.getOrNull(1)?.toIntOrNull() ?: PBKDF2_ITERATIONS
-            val computed = hashPinPbkdf2(enteredPin, salt, iterations)
-            return constantTimeEquals(computed, storedHash)
+            if (parts.size >= 3) {
+                val iterations = parts[1].toIntOrNull()
+                // Reject invalid or out-of-bounds iteration parameters
+                if (iterations == null || iterations !in MIN_SAFE_ITERATIONS..MAX_SAFE_ITERATIONS) {
+                    return false
+                }
+                val computed = hashPinPbkdf2(enteredPin, salt, iterations)
+                return constantTimeEquals(computed, storedHash)
+            }
+            return false
         }
 
         // Backward compatibility: legacy SHA-256 hash
@@ -79,6 +89,17 @@ object SecurityUtils {
         }
 
         return false
+    }
+
+    /**
+     * Checks if credentials require upgrade (e.g. plain text, legacy SHA-256, or PBKDF2 with outdated iterations).
+     */
+    fun needsUpgrade(settings: UserSettings): Boolean {
+        if (!settings.pinCode.isNullOrBlank()) return true
+        val hash = settings.pinHash ?: return false
+        if (!hash.startsWith("PBKDF2$")) return true
+        val iterations = hash.split("$").getOrNull(1)?.toIntOrNull() ?: 0
+        return iterations < PBKDF2_ITERATIONS
     }
 
     /**
