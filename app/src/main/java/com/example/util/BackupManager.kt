@@ -89,7 +89,7 @@ object BackupManager {
      * A regex alone would accept impossible dates such as 2026-02-30.
      */
     private fun isValidDate(date: String): Boolean {
-        if (!isValidDate(date)) return false
+        if (!DATE_REGEX.matches(date)) return false
         val formatter = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).apply {
             isLenient = false
         }
