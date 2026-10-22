@@ -123,22 +123,71 @@ object AlarmScheduler {
     }
 
     /**
-     * Reschedules all active habits and mandatory reminders (suspend version for BroadcastReceivers).
+     * Cancels the pending daily mandatory reminder.
+     */
+    fun cancelMandatoryReminder(context: Context) {
+        val intent = Intent(context, AlarmReceiver::class.java).apply {
+            action = ACTION_MANDATORY_REMINDER
+        }
+        val pendingIntent = PendingIntent.getBroadcast(
+            context,
+            MANDATORY_REQUEST_CODE,
+            intent,
+            PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
+        )
+        if (pendingIntent != null) {
+            val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager
+            alarmManager?.cancel(pendingIntent)
+            pendingIntent.cancel()
+        }
+    }
+
+    /**
+     * Cancels a one-off snooze alarm for a habit.
+     */
+    fun cancelHabitSnooze(context: Context, habitId: Long) {
+        val intent = Intent(context, AlarmReceiver::class.java).apply {
+            action = ACTION_HABIT_SNOOZE_FIRE
+        }
+        val pendingIntent = PendingIntent.getBroadcast(
+            context,
+            (habitId * 10 + 3).toInt(),
+            intent,
+            PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
+        )
+        if (pendingIntent != null) {
+            val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager
+            alarmManager?.cancel(pendingIntent)
+            pendingIntent.cancel()
+        }
+    }
+
+    /**
+     * Reschedules alarms according to current preferences, also removing stale alarms.
      */
     suspend fun rescheduleAllAlarmsSuspend(context: Context) {
         try {
             val db = AppDatabase.getDatabase(context)
             val settings = db.settingsDao().getSettings().firstOrNull()
-            val habits = db.habitDao().getAllActiveHabits().firstOrNull() ?: emptyList()
+            val habits = db.habitDao().getAllHabits().firstOrNull() ?: emptyList()
+            val notificationsEnabled = settings?.notificationsEnabled == true
+            val habitRemindersEnabled = notificationsEnabled && settings?.overdueRemindersEnabled == true
 
-            if (settings?.notificationsEnabled == true) {
-                habits.forEach { habit ->
+            habits.forEach { habit ->
+                if (habitRemindersEnabled) {
                     scheduleHabitReminder(context, habit)
+                } else {
+                    cancelHabitReminder(context, habit.id)
+                    cancelHabitSnooze(context, habit.id)
+                    androidx.core.app.NotificationManagerCompat.from(context).cancel(habit.id.toInt())
                 }
+            }
 
-                if (settings.mandatoryRemindersEnabled) {
-                    scheduleMandatoryReminder(context, settings.mandatoryDeadlineTime)
-                }
+            if (notificationsEnabled && settings?.mandatoryRemindersEnabled == true) {
+                scheduleMandatoryReminder(context, settings.mandatoryDeadlineTime)
+            } else {
+                cancelMandatoryReminder(context)
+                androidx.core.app.NotificationManagerCompat.from(context).cancel(MANDATORY_REQUEST_CODE)
             }
         } catch (t: Throwable) {
             android.util.Log.e("AlarmScheduler", "Error rescheduling alarms", t)
