@@ -126,6 +126,15 @@ class DatabaseOperationsTest {
             )
         val sDb = helper.writableDatabase
 
+        // Seed a representative pre-migration record to ensure schema changes preserve user data.
+        sDb.execSQL(
+            "INSERT INTO habitos (id, name, type, targetTime, daysOfWeek, durationMinutes, streakCount, " +
+                "reminderSound, ringDurationMinutes, dismissPhrase, isActive, positiveConsequence, " +
+                "negativeConsequence, lastCompletedDate, createdAt, updatedAt) VALUES " +
+                "(42, 'Hábito legado', 'FOCUS', '08:30', '1,2,3,4,5', 20, 3, 'default', 5, " +
+                "'Concluído', 1, 'Pausa', 'Retomar', NULL, 1000, 2000)"
+        )
+
         // Test Migration 1 -> 2
         AppDatabase.MIGRATION_1_2.migrate(sDb)
         val c1 = sDb.query("SELECT name FROM sqlite_master WHERE type='table' AND name='alarm_events'")
@@ -184,6 +193,14 @@ class DatabaseOperationsTest {
         }
         c6.close()
         assertTrue("user_settings must have hasSeededInitialData after MIGRATION_6_7", hasSeeded)
+
+        val preservedHabit = sDb.query("SELECT id, name, targetTime, daysOfWeek FROM habitos WHERE id = 42")
+        assertTrue("Legacy habit must remain after all migrations", preservedHabit.moveToFirst())
+        assertEquals(42L, preservedHabit.getLong(0))
+        assertEquals("Hábito legado", preservedHabit.getString(1))
+        assertEquals("08:30", preservedHabit.getString(2))
+        assertEquals("1,2,3,4,5", preservedHabit.getString(3))
+        preservedHabit.close()
 
         sDb.close()
     }
