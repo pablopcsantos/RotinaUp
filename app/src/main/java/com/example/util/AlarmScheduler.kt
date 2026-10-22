@@ -205,24 +205,32 @@ object AlarmScheduler {
         }
     }
 
-    private fun calculateNextTriggerTime(timeStr: String, daysOfWeek: String): Long? {
+    internal fun calculateNextTriggerTime(
+        timeStr: String,
+        daysOfWeek: String,
+        nowMillis: Long = System.currentTimeMillis()
+    ): Long? {
         val parts = timeStr.split(":")
-        val targetHour = parts.getOrNull(0)?.toIntOrNull() ?: return null
-        val targetMin = parts.getOrNull(1)?.toIntOrNull() ?: return null
+        if (parts.size != 2) return null
+        val targetHour = parts[0].toIntOrNull() ?: return null
+        val targetMin = parts[1].toIntOrNull() ?: return null
+        if (targetHour !in 0..23 || targetMin !in 0..59) return null
 
         val scheduledDays = daysOfWeek.split(",")
             .mapNotNull { it.trim().toIntOrNull() }
+            .filter { it in 1..7 }
             .toSet()
-
         if (scheduledDays.isEmpty()) return null
 
-        val cal = Calendar.getInstance()
-        cal.set(Calendar.SECOND, 0)
-        cal.set(Calendar.MILLISECOND, 0)
+        val base = Calendar.getInstance().apply {
+            timeInMillis = nowMillis
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
 
         for (offset in 0..7) {
             val candidate = Calendar.getInstance().apply {
-                timeInMillis = cal.timeInMillis
+                timeInMillis = base.timeInMillis
                 add(Calendar.DAY_OF_YEAR, offset)
                 set(Calendar.HOUR_OF_DAY, targetHour)
                 set(Calendar.MINUTE, targetMin)
@@ -242,7 +250,7 @@ object AlarmScheduler {
                 else -> 1
             }
 
-            if (scheduledDays.contains(isoDay) && candidate.timeInMillis > System.currentTimeMillis()) {
+            if (isoDay in scheduledDays && candidate.timeInMillis > nowMillis) {
                 return candidate.timeInMillis
             }
         }
