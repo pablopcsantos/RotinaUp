@@ -315,4 +315,65 @@ class BackupRestoreTest {
         assertEquals("dark", currentSettings.themeMode)
         assertEquals("Repouso", currentSettings.typeSleepName)
     }
+
+    @Test
+    fun `schedule import preserves existing habits and tracking history even in replace mode`() = runBlocking {
+        val habitDao = db.habitDao()
+        val existingId = habitDao.insertHabit(
+            Habit(id = 101, name = "Hábito local", targetTime = "08:00")
+        )
+        habitDao.insertOrUpdateLog(
+            HabitLog(id = 201, habitId = existingId, date = "2026-10-22", status = "DONE")
+        )
+
+        val scheduleJson = """
+            [
+              { "name": "Hábito importado", "targetTime": "09:30", "daysOfWeek": "1,2,3" }
+            ]
+        """.trimIndent()
+        val validation = BackupManager.validateBackupJson(scheduleJson) as BackupValidationResult.Success
+        assertTrue(validation.payload.isScheduleOnly)
+
+        // Even if the caller asks to replace, schedule-only imports must be non-destructive.
+        val result = BackupManager.restoreBackup(context, db, validation.payload, replaceExisting = true)
+        assertTrue(result.success)
+
+        val habits = habitDao.getAllHabits().first()
+        assertEquals(2, habits.size)
+        assertTrue(habits.any { it.id == existingId && it.name == "Hábito local" })
+        assertTrue(habits.any { it.name == "Hábito importado" && it.id != existingId })
+        val logs = habitDao.getAllLogs().first()
+        assertEquals(1, logs.size)
+        assertEquals(existingId, logs.single().habitId)
+    }
+
+    @Test
+    fun `legacy habits-only backup preserves existing tracking history`() = runBlocking {
+        val habitDao = db.habitDao()
+        val existingId = habitDao.insertHabit(
+            Habit(id = 301, name = "Hábito com histórico", targetTime = "07:00")
+        )
+        habitDao.insertOrUpdateLog(
+            HabitLog(id = 401, habitId = existingId, date = "2026-10-21", status = "DONE")
+        )
+
+        val legacyJson = """
+            {
+              "app": "Rotina Viva",
+              "timestamp": 1729600000000,
+              "habits": [
+                { "id": 1, "name": "Hábito do backup antigo", "targetTime": "10:00" }
+              ]
+            }
+        """.trimIndent()
+        val validation = BackupManager.validateBackupJson(legacyJson) as BackupValidationResult.Success
+        assertTrue(validation.payload.isScheduleOnly)
+
+        val result = BackupManager.restoreBackup(context, db, validation.payload, replaceExisting = true)
+        assertTrue(result.success)
+        assertEquals(2, habitDao.getAllHabits().first().size)
+        assertEquals(1, habitDao.getAllLogs().first().size)
+        assertEquals(existingId, habitDao.getAllLogs().first().single().habitId)
+    }
+
 }
