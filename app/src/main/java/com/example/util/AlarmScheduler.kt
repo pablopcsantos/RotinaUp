@@ -34,12 +34,14 @@ object AlarmScheduler {
     fun scheduleHabitReminder(context: Context, habit: Habit) {
         if (!habit.isActive) {
             cancelHabitReminder(context, habit.id)
+            cancelHabitSnooze(context, habit.id)
             return
         }
 
         val triggerAtMillis = calculateNextTriggerTime(habit.targetTime, habit.daysOfWeek)
         if (triggerAtMillis == null) {
             cancelHabitReminder(context, habit.id)
+            cancelHabitSnooze(context, habit.id)
             return
         }
 
