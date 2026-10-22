@@ -377,4 +377,54 @@ class BackupRestoreTest {
         assertEquals(existingId, habitDao.getAllLogs().first().single().habitId)
     }
 
+
+    @Test
+    fun `merge remaps colliding IDs and preserves existing records`() = runBlocking {
+        val habitDao = db.habitDao()
+        val sleepDao = db.sleepDao()
+        val localHabitId = habitDao.insertHabit(
+            Habit(id = 1, name = "Hábito local", type = "FOCUS", targetTime = "08:00")
+        )
+        habitDao.insertOrUpdateLog(
+            HabitLog(id = 1, habitId = localHabitId, date = "2026-10-20", status = "DONE", note = "Registro local")
+        )
+        sleepDao.insertSleepLog(
+            SleepLog(id = 1, date = "2026-10-20", bedtimeStr = "22:00", wakeTimeStr = "06:00", note = "Sono local")
+        )
+
+        val backupJson = """
+            {
+              "schemaVersion": 1,
+              "appName": "RotinaUp",
+              "habits": [
+                { "id": 1, "name": "Hábito importado", "type": "FOCUS", "targetTime": "09:00" }
+              ],
+              "habitLogs": [
+                { "id": 1, "habitId": 1, "date": "2026-10-21", "status": "DONE", "note": "Registro importado" }
+              ],
+              "sleepLogs": [
+                { "id": 1, "date": "2026-10-20", "bedtimeStr": "23:00", "wakeTimeStr": "07:00", "note": "Sono importado" }
+              ]
+            }
+        """.trimIndent()
+        val validation = BackupManager.validateBackupJson(backupJson) as BackupValidationResult.Success
+
+        val result = BackupManager.restoreBackup(context, db, validation.payload, replaceExisting = false)
+        assertTrue(result.success)
+
+        val habits = habitDao.getAllHabits().first()
+        assertEquals(2, habits.size)
+        val importedHabit = habits.single { it.name == "Hábito importado" }
+        assertNotEquals("Imported habit must receive a fresh local ID", localHabitId, importedHabit.id)
+
+        val logs = habitDao.getAllLogs().first()
+        assertEquals(2, logs.size)
+        assertTrue(logs.any { it.habitId == localHabitId && it.note == "Registro local" })
+        assertTrue(logs.any { it.habitId == importedHabit.id && it.note == "Registro importado" })
+
+        val sleepLogs = sleepDao.getAllSleepLogs().first()
+        assertEquals(1, sleepLogs.size)
+        assertEquals("Sono local", sleepLogs.single().note)
+    }
+
 }
