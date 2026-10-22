@@ -188,11 +188,11 @@ class SecurityUtilsTest {
         val salt = "test-salt"
         val malformedHashes = listOf(
             "PBKDF2",
-            "PBKDF2\\$100000",
-            "PBKDF2\\$100000\\$too-short",
-            "PBKDF2\\$100000\\$" + "g".repeat(64),
-            "PBKDF2\\$600000\\$" + "a".repeat(64),
-            "PBKDF2\\$100000\\$" + "a".repeat(64) + "\\$extra"
+            "PBKDF2\$100000",
+            "PBKDF2\$100000\$too-short",
+            "PBKDF2\$100000\$" + "g".repeat(64),
+            "PBKDF2\$600000\$" + "a".repeat(64),
+            "PBKDF2\$100000\$" + "a".repeat(64) + "\$extra"
         )
 
         malformedHashes.forEach { hash ->
