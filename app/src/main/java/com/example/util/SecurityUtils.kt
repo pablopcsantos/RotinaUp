@@ -42,7 +42,7 @@ object SecurityUtils {
             val factory = SecretKeyFactory.getInstance(PBKDF2_ALGORITHM)
             val hashBytes = factory.generateSecret(spec).encoded
             val hex = hashBytes.joinToString("") { "%02x".format(it) }
-            return "PBKDF2\$safeIterations\$hex"
+            return "PBKDF2\$$safeIterations\$$hex"
         } finally {
             // Clear the mutable password copy held by PBEKeySpec as soon as derivation finishes.
             spec.clearPassword()
