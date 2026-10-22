@@ -368,6 +368,7 @@ class BackupRestoreTest {
         """.trimIndent()
         val validation = BackupManager.validateBackupJson(legacyJson) as BackupValidationResult.Success
         assertTrue(validation.payload.isScheduleOnly)
+        assertTrue(validation.preview.isScheduleOnly)
 
         val result = BackupManager.restoreBackup(context, db, validation.payload, replaceExisting = true)
         assertTrue(result.success)
