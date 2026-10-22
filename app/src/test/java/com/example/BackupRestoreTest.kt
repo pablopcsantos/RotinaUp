@@ -233,6 +233,45 @@ class BackupRestoreTest {
     }
 
     @Test
+    fun `backup validation rejects impossible calendar dates`() {
+        val invalidHabitLogDate = """
+            {
+              "schemaVersion": 1,
+              "habits": [
+                { "id": 1, "name": "Leitura", "type": "FOCUS", "targetTime": "08:00" }
+              ],
+              "habitLogs": [
+                { "id": 1, "habitId": 1, "date": "2026-02-30", "status": "DONE" }
+              ]
+            }
+        """.trimIndent()
+        assertTrue(
+            "Impossible habit-log dates must be rejected",
+            BackupManager.validateBackupJson(invalidHabitLogDate) is BackupValidationResult.Error
+        )
+
+        val invalidSleepDate = """
+            {
+              "schemaVersion": 1,
+              "sleepLogs": [
+                {
+                  "id": 1,
+                  "date": "2026-13-01",
+                  "bedtimeStr": "23:00",
+                  "wakeTimeStr": "07:00",
+                  "durationMinutes": 480,
+                  "quality": 4
+                }
+              ]
+            }
+        """.trimIndent()
+        assertTrue(
+            "Impossible sleep-log dates must be rejected",
+            BackupManager.validateBackupJson(invalidSleepDate) is BackupValidationResult.Error
+        )
+    }
+
+    @Test
     fun `test schedule format validation and restoration`() = runBlocking {
         val scheduleJson = """
             [

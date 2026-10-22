@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
+import java.text.ParsePosition
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -82,6 +83,20 @@ object BackupManager {
 
     private val TIME_REGEX = Regex("^(?:[01]\\d|2[0-3]):[0-5]\\d$")
     private val DATE_REGEX = Regex("^\\d{4}-\\d{2}-\\d{2}$")
+
+    /**
+     * Validates both the ISO date shape and the actual calendar date.
+     * A regex alone would accept impossible dates such as 2026-02-30.
+     */
+    private fun isValidDate(date: String): Boolean {
+        if (!DATE_REGEX.matches(date)) return false
+        val formatter = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).apply {
+            isLenient = false
+        }
+        val position = ParsePosition(0)
+        val parsed = formatter.parse(date, position) ?: return false
+        return position.index == date.length && formatter.format(parsed) == date
+    }
 
     /**
      * Exports a complete backup containing habits, all tracking logs, reviews, alarm events,
@@ -359,7 +374,7 @@ object BackupManager {
                             ?: return BackupValidationResult.Error("Registro de hábito no índice ${i + 1} inválido.")
                         val habitId = item.optLong("habitId", -1L)
                         val date = item.optString("date")
-                        if (habitId <= 0 || !DATE_REGEX.matches(date)) {
+                        if (habitId <= 0 || !isValidDate(date)) {
                             return BackupValidationResult.Error("Registro de hábito no índice ${i + 1} possui data ou habitId inválido.")
                         }
                         val status = item.optString("status", "DONE").uppercase()
@@ -387,7 +402,7 @@ object BackupManager {
                         val item = sArr.optJSONObject(i)
                             ?: return BackupValidationResult.Error("Registro de sono no índice ${i + 1} inválido.")
                         val date = item.optString("date")
-                        if (!DATE_REGEX.matches(date)) {
+                        if (!isValidDate(date)) {
                             return BackupValidationResult.Error("Registro de sono no índice ${i + 1} possui data inválida: '$date'.")
                         }
                         parsedSleep.add(
@@ -416,7 +431,7 @@ object BackupManager {
                         val item = nArr.optJSONObject(i)
                             ?: return BackupValidationResult.Error("Registro de cochilo no índice ${i + 1} inválido.")
                         val date = item.optString("date")
-                        if (!DATE_REGEX.matches(date)) {
+                        if (!isValidDate(date)) {
                             return BackupValidationResult.Error("Registro de cochilo no índice ${i + 1} possui data inválida.")
                         }
                         parsedNaps.add(
@@ -442,7 +457,7 @@ object BackupManager {
                         val item = rArr.optJSONObject(i)
                             ?: return BackupValidationResult.Error("Diário noturno no índice ${i + 1} inválido.")
                         val date = item.optString("date")
-                        if (!DATE_REGEX.matches(date)) {
+                        if (!isValidDate(date)) {
                             return BackupValidationResult.Error("Diário noturno no índice ${i + 1} possui data inválida.")
                         }
                         parsedReviews.add(
