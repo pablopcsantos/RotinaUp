@@ -702,11 +702,20 @@ object BackupManager {
                         .map { it.copy(id = 0L) }
                     if (reviewsToInsert.isNotEmpty()) sleepDao.insertAllDailyReviews(reviewsToInsert)
 
-                    // Alarm events are append-only during merge and must point at the
-                    // corresponding local habit IDs; orphaned events are ignored.
+                    // Keep merge imports idempotent: importing the same backup twice must not
+                    // duplicate identical alarm-history events. IDs are local and are not part
+                    // of an event's identity; orphaned events are ignored.
+                    val alarmEventKey: (AlarmEvent) -> String = { event ->
+                        "${event.habitId}|${event.scheduledAt}|${event.dismissedAt}|" +
+                            "${event.dismissAttempts}|${event.snoozed}|${event.typedText}"
+                    }
+                    val existingAlarmEventKeys = (settingsDao.getAllAlarmEvents().firstOrNull() ?: emptyList())
+                        .map(alarmEventKey)
+                        .toMutableSet()
                     val alarmsToInsert = payload.alarmEvents.mapNotNull { event ->
                         val mappedHabitId = importedHabitIds[event.habitId] ?: return@mapNotNull null
-                        event.copy(id = 0L, habitId = mappedHabitId)
+                        val remapped = event.copy(id = 0L, habitId = mappedHabitId)
+                        if (existingAlarmEventKeys.add(alarmEventKey(remapped))) remapped else null
                     }
                     if (alarmsToInsert.isNotEmpty()) settingsDao.insertAllAlarmEvents(alarmsToInsert)
                 }
