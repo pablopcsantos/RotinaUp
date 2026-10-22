@@ -3,6 +3,10 @@ package com.example.ui.screens
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -29,8 +33,13 @@ import com.example.data.model.Habit
 import com.example.ui.theme.StatusDone
 import com.example.ui.theme.StatusPartial
 import com.example.ui.viewmodel.MainViewModel
+import com.example.util.BackupValidationResult
+import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -62,6 +71,33 @@ fun SettingsScreen(
     var newCustomTypeName by remember { mutableStateOf("") }
     var mandatoryDeadline by remember(settings) { mutableStateOf(settings.mandatoryDeadlineTime) }
 
+    val coroutineScope = rememberCoroutineScope()
+    var showRestoreDialog by remember { mutableStateOf(false) }
+    var restoreInputText by remember { mutableStateOf("") }
+    var validationResult by remember { mutableStateOf<BackupValidationResult?>(null) }
+    var replaceExistingMode by remember { mutableStateOf(true) }
+    var isRestoring by remember { mutableStateOf(false) }
+
+    var showExportDialog by remember { mutableStateOf(false) }
+    var exportTitle by remember { mutableStateOf("") }
+    var exportedJsonContent by remember { mutableStateOf("") }
+
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            try {
+                context.contentResolver.openInputStream(uri)?.use { stream ->
+                    val content = stream.bufferedReader().use { it.readText() }
+                    restoreInputText = content
+                    validationResult = viewModel.validateBackup(content)
+                }
+            } catch (e: Exception) {
+                viewModel.showToast("Erro ao abrir arquivo: ${e.localizedMessage}")
+            }
+        }
+    }
+
     fun isValidDeadlineTime(value: String): Boolean {
         val match = Regex("^(?:[01]\\d|2[0-3]):[0-5]\\d$").matchEntire(value.trim())
         return match != null
@@ -78,6 +114,16 @@ fun SettingsScreen(
         }
         clipboard.setPrimaryClip(clip)
         viewModel.showToast("$label copiado para a área de transferência!")
+    }
+
+    fun shareText(title: String, content: String) {
+        val sendIntent = Intent().apply {
+            action = Intent.ACTION_SEND
+            putExtra(Intent.EXTRA_TEXT, content)
+            putExtra(Intent.EXTRA_TITLE, title)
+            type = "text/plain"
+        }
+        context.startActivity(Intent.createChooser(sendIntent, title))
     }
 
     Scaffold(
@@ -884,78 +930,108 @@ fun SettingsScreen(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text("Gerenciamento de Dados", fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                        Spacer(modifier = Modifier.height(10.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.CloudSync, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text("Gerenciamento de Dados", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                Text("Exportação segura e restauração com validação", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(14.dp))
 
                         // Cronograma (.rvschedule)
-                        Text("Cronograma de Hábitos (.rvschedule)", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Spacer(modifier = Modifier.height(4.dp))
+                        Text("Cronograma de Hábitos (.rvschedule)", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary)
+                        Text("Exporte ou importe apenas a grade de hábitos sem os históricos.", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(modifier = Modifier.height(8.dp))
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             FilledTonalButton(
                                 onClick = {
-                                    val jsonArr = JSONArray()
-                                    habits.forEach { h ->
-                                        val obj = JSONObject()
-                                        obj.put("name", h.name)
-                                        obj.put("type", h.type)
-                                        obj.put("targetTime", h.targetTime)
-                                        obj.put("durationMinutes", h.durationMinutes)
-                                        obj.put("daysOfWeek", h.daysOfWeek)
-                                        obj.put("priority", h.priority)
-                                        obj.put("positiveConsequence", h.positiveConsequence)
-                                        obj.put("negativeConsequence", h.negativeConsequence)
-                                        obj.put("dismissPhrase", h.dismissPhrase)
-                                        jsonArr.put(obj)
+                                    coroutineScope.launch {
+                                        val json = viewModel.exportSchedule()
+                                        exportTitle = "Cronograma (.rvschedule)"
+                                        exportedJsonContent = json
+                                        showExportDialog = true
                                     }
-                                    copyToClipboard("Cronograma (.rvschedule)", jsonArr.toString(2))
                                 },
                                 shape = RoundedCornerShape(12.dp),
                                 modifier = Modifier.weight(1f)
                             ) {
-                                Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(14.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("Exportar", fontSize = 11.sp)
+                                Icon(Icons.Default.UploadFile, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Exportar", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
+
+                            OutlinedButton(
+                                onClick = {
+                                    restoreInputText = ""
+                                    validationResult = null
+                                    showRestoreDialog = true
+                                },
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(Icons.Default.FileDownload, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Importar", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(12.dp))
+                        Spacer(modifier = Modifier.height(16.dp))
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                        Spacer(modifier = Modifier.height(14.dp))
 
-                        // Backup Completo
-                        Text("Backup Completo (.rvbackup)", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Spacer(modifier = Modifier.height(4.dp))
+                        // Backup Completo (.rvbackup)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text("Backup Completo (.rvbackup)", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary)
+                                val lastBackupFormatted = settings.lastBackupAt?.let {
+                                    SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()).format(Date(it))
+                                } ?: "Nenhum backup realizado ainda"
+                                Text("Último backup: $lastBackupFormatted", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Button(
                                 onClick = {
-                                    val backupObj = JSONObject()
-                                    backupObj.put("app", "Rotina Viva")
-                                    backupObj.put("timestamp", System.currentTimeMillis())
-                                    val habArr = JSONArray()
-                                    habits.forEach { h ->
-                                        val obj = JSONObject()
-                                        obj.put("id", h.id)
-                                        obj.put("name", h.name)
-                                        obj.put("type", h.type)
-                                        obj.put("targetTime", h.targetTime)
-                                        obj.put("durationMinutes", h.durationMinutes)
-                                        obj.put("daysOfWeek", h.daysOfWeek)
-                                        obj.put("dismissPhrase", h.dismissPhrase)
-                                        habArr.put(obj)
+                                    coroutineScope.launch {
+                                        val json = viewModel.exportCompleteBackup()
+                                        exportTitle = "Backup Completo (.rvbackup)"
+                                        exportedJsonContent = json
+                                        showExportDialog = true
                                     }
-                                    backupObj.put("habits", habArr)
-                                    copyToClipboard("Backup Completo (.rvbackup)", backupObj.toString(2))
                                 },
                                 shape = RoundedCornerShape(12.dp),
                                 modifier = Modifier.weight(1f)
                             ) {
-                                Icon(Icons.Default.CloudUpload, contentDescription = null, modifier = Modifier.size(14.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("Gerar Backup", fontSize = 11.sp)
+                                Icon(Icons.Default.CloudUpload, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Gerar Backup", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
+
+                            FilledTonalButton(
+                                onClick = {
+                                    restoreInputText = ""
+                                    validationResult = null
+                                    showRestoreDialog = true
+                                },
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Restaurar", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -1083,6 +1159,290 @@ fun SettingsScreen(
                     tempPin = ""
                 }) {
                     Text("Cancelar")
+                }
+            }
+        )
+    }
+
+    // Restore Backup Dialog
+    if (showRestoreDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                if (!isRestoring) {
+                    showRestoreDialog = false
+                    restoreInputText = ""
+                    validationResult = null
+                }
+            },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.SettingsBackupRestore, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Restaurar Dados", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                }
+            },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 480.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text(
+                        "Importe um arquivo de backup (.rvbackup) ou cronograma (.rvschedule) para recuperar seus hábitos e registros.",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    // Action buttons to populate data
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        FilledTonalButton(
+                            onClick = {
+                                filePickerLauncher.launch("*/*")
+                            },
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.weight(1f),
+                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 6.dp)
+                        ) {
+                            Icon(Icons.Default.AttachFile, contentDescription = null, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Carregar Arquivo", fontSize = 11.sp)
+                        }
+
+                        FilledTonalButton(
+                            onClick = {
+                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                val clip = clipboard.primaryClip?.getItemAt(0)?.text?.toString() ?: ""
+                                if (clip.isNotBlank()) {
+                                    restoreInputText = clip
+                                    validationResult = viewModel.validateBackup(clip)
+                                } else {
+                                    viewModel.showToast("Área de transferência está vazia.")
+                                }
+                            },
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.weight(1f),
+                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 6.dp)
+                        ) {
+                            Icon(Icons.Default.ContentPaste, contentDescription = null, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Colar do Clipboard", fontSize = 11.sp)
+                        }
+                    }
+
+                    OutlinedTextField(
+                        value = restoreInputText,
+                        onValueChange = {
+                            restoreInputText = it
+                            validationResult = null
+                        },
+                        placeholder = { Text("Conteúdo JSON do backup...", fontSize = 11.sp) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(100.dp),
+                        shape = RoundedCornerShape(10.dp),
+                        textStyle = androidx.compose.ui.text.TextStyle(fontSize = 10.sp)
+                    )
+
+                    if (validationResult == null && restoreInputText.isNotBlank()) {
+                        Button(
+                            onClick = {
+                                validationResult = viewModel.validateBackup(restoreInputText)
+                            },
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Default.FactCheck, contentDescription = null, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Validar Dados do Backup", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    // Validation Feedback
+                    validationResult?.let { res ->
+                        when (res) {
+                            is BackupValidationResult.Error -> {
+                                Surface(
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f),
+                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.error),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(10.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(Icons.Default.ErrorOutline, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(res.message, color = MaterialTheme.colorScheme.onErrorContainer, fontSize = 11.sp)
+                                    }
+                                }
+                            }
+                            is BackupValidationResult.Success -> {
+                                val prev = res.preview
+                                Card(
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)),
+                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(Icons.Default.CheckCircle, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text("Backup Válido: ${prev.appName}", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
+                                        }
+                                        Text("Exportado em: ${prev.formattedExportDate}", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        Text(
+                                            "• ${prev.habitsCount} hábitos encontrados\n" +
+                                            "• ${prev.habitLogsCount} registros de hábitos\n" +
+                                            "• ${prev.sleepLogsCount} noites de sono | ${prev.napLogsCount} cochilos\n" +
+                                            "• ${prev.dailyReviewsCount} diários noturnos\n" +
+                                            "• Configurações: ${if (prev.hasSettings) "Inclusas (PIN local protegido)" else "Padrão"}",
+                                            fontSize = 10.sp,
+                                            lineHeight = 14.sp
+                                        )
+                                    }
+                                }
+
+                                // Restore mode selection
+                                Text("Modo de Restauração:", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    RadioButton(
+                                        selected = replaceExistingMode,
+                                        onClick = { replaceExistingMode = true }
+                                    )
+                                    Text(
+                                        "Substituir Tudo (Recomendado)",
+                                        fontSize = 11.sp,
+                                        modifier = Modifier.clickable { replaceExistingMode = true }
+                                    )
+                                }
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    RadioButton(
+                                        selected = !replaceExistingMode,
+                                        onClick = { replaceExistingMode = false }
+                                    )
+                                    Text(
+                                        "Mesclar com dados atuais",
+                                        fontSize = 11.sp,
+                                        modifier = Modifier.clickable { replaceExistingMode = false }
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    if (isRestoring) {
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                    }
+                }
+            },
+            confirmButton = {
+                val isValid = validationResult is BackupValidationResult.Success
+                Button(
+                    onClick = {
+                        val payload = (validationResult as? BackupValidationResult.Success)?.payload
+                        if (payload != null && !isRestoring) {
+                            isRestoring = true
+                            viewModel.restoreBackup(payload, replaceExistingMode) { result ->
+                                isRestoring = false
+                                if (result.success) {
+                                    showRestoreDialog = false
+                                    restoreInputText = ""
+                                    validationResult = null
+                                }
+                            }
+                        }
+                    },
+                    enabled = isValid && !isRestoring,
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                ) {
+                    Text(if (isRestoring) "Restaurando..." else "Restaurar Agora")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showRestoreDialog = false
+                        restoreInputText = ""
+                        validationResult = null
+                    },
+                    enabled = !isRestoring
+                ) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
+
+    // Export Result Dialog
+    if (showExportDialog) {
+        AlertDialog(
+            onDismissRequest = { showExportDialog = false },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.CheckCircle, contentDescription = null, tint = StatusDone)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(exportTitle, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                }
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        "Dados gerados com sucesso no formato JSON. Você pode copiar para a área de transferência ou compartilhar diretamente como arquivo/mensagem.",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    OutlinedTextField(
+                        value = exportedJsonContent.take(500) + if (exportedJsonContent.length > 500) "\n... (${exportedJsonContent.length} caracteres)" else "",
+                        onValueChange = {},
+                        readOnly = true,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(110.dp),
+                        shape = RoundedCornerShape(10.dp),
+                        textStyle = androidx.compose.ui.text.TextStyle(fontSize = 10.sp)
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        copyToClipboard(exportTitle, exportedJsonContent)
+                        showExportDialog = false
+                    }
+                ) {
+                    Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(14.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Copiar")
+                }
+            },
+            dismissButton = {
+                Row {
+                    OutlinedButton(
+                        onClick = {
+                            shareText(exportTitle, exportedJsonContent)
+                            showExportDialog = false
+                        }
+                    ) {
+                        Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Compartilhar")
+                    }
+                    Spacer(modifier = Modifier.width(6.dp))
+                    TextButton(onClick = { showExportDialog = false }) {
+                        Text("Fechar")
+                    }
                 }
             }
         )

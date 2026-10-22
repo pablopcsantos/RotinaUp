@@ -145,7 +145,17 @@ class AlarmReceiver : BroadcastReceiver() {
             .addAction(0, "Adiar 15m ⏰", snoozePendingIntent)
 
         try {
-            NotificationManagerCompat.from(context).notify(habit.id.toInt(), builder.build())
+            val hasNotificationPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                androidx.core.content.ContextCompat.checkSelfPermission(
+                    context,
+                    android.Manifest.permission.POST_NOTIFICATIONS
+                ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+            } else {
+                NotificationManagerCompat.from(context).areNotificationsEnabled()
+            }
+            if (hasNotificationPermission) {
+                NotificationManagerCompat.from(context).notify(habit.id.toInt(), builder.build())
+            }
         } catch (_: SecurityException) {
             // Notification permission might not be granted by user
         }
@@ -193,7 +203,17 @@ class AlarmReceiver : BroadcastReceiver() {
             .setContentIntent(openPendingIntent)
 
         try {
-            NotificationManagerCompat.from(context).notify(99999, builder.build())
+            val hasNotificationPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                androidx.core.content.ContextCompat.checkSelfPermission(
+                    context,
+                    android.Manifest.permission.POST_NOTIFICATIONS
+                ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+            } else {
+                NotificationManagerCompat.from(context).areNotificationsEnabled()
+            }
+            if (hasNotificationPermission) {
+                NotificationManagerCompat.from(context).notify(99999, builder.build())
+            }
         } catch (_: SecurityException) {}
     }
 

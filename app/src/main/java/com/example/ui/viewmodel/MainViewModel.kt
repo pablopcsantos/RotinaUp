@@ -450,6 +450,42 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    suspend fun exportCompleteBackup(): String {
+        val json = com.example.util.BackupManager.exportCompleteBackup(db)
+        val current = userSettings.value
+        settingsDao.insertOrUpdateSettings(current.copy(lastBackupAt = System.currentTimeMillis()))
+        return json
+    }
+
+    suspend fun exportSchedule(): String {
+        return com.example.util.BackupManager.exportSchedule(db)
+    }
+
+    fun validateBackup(json: String): com.example.util.BackupValidationResult {
+        return com.example.util.BackupManager.validateBackupJson(json)
+    }
+
+    fun restoreBackup(
+        payload: com.example.util.BackupPayload,
+        replaceExisting: Boolean,
+        onComplete: (com.example.util.RestoreResult) -> Unit
+    ) {
+        viewModelScope.launch {
+            val result = com.example.util.BackupManager.restoreBackup(
+                context = getApplication(),
+                db = db,
+                payload = payload,
+                replaceExisting = replaceExisting
+            )
+            if (result.success) {
+                showToast(result.message)
+            } else {
+                showToast("Erro ao restaurar: ${result.message}")
+            }
+            onComplete(result)
+        }
+    }
+
     // Circadian streak check (3 late nights)
     fun checkLateBedtimeStreak(sleepLogs: List<SleepLog>, targetBedtime: String): Boolean {
         try {

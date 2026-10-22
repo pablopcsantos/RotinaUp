@@ -17,8 +17,14 @@ interface SettingsDao {
     @Query("SELECT * FROM alarm_events ORDER BY scheduledAt DESC LIMIT 50")
     fun getAlarmEvents(): Flow<List<AlarmEvent>>
 
+    @Query("SELECT * FROM alarm_events ORDER BY scheduledAt DESC")
+    fun getAllAlarmEvents(): Flow<List<AlarmEvent>>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAlarmEvent(event: AlarmEvent): Long
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAllAlarmEvents(events: List<AlarmEvent>)
 
     @Query("DELETE FROM alarm_events")
     suspend fun deleteAllAlarmEvents()
