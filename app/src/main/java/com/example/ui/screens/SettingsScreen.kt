@@ -98,6 +98,21 @@ fun SettingsScreen(
         }
     }
 
+    val createDocumentLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/json")
+    ) { uri: Uri? ->
+        if (uri != null) {
+            try {
+                val output = context.contentResolver.openOutputStream(uri)
+                    ?: throw IllegalStateException("Não foi possível abrir o arquivo para gravação.")
+                output.use { it.write(exportedJsonContent.toByteArray(Charsets.UTF_8)) }
+                viewModel.showToast("Arquivo salvo com sucesso.")
+            } catch (e: Exception) {
+                viewModel.showToast("Erro ao salvar arquivo: ${e.localizedMessage ?: "erro desconhecido"}")
+            }
+        }
+    }
+
     fun isValidDeadlineTime(value: String): Boolean {
         val match = Regex("^(?:[01]\\d|2[0-3]):[0-5]\\d$").matchEntire(value.trim())
         return match != null
@@ -1407,7 +1422,7 @@ fun SettingsScreen(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(
-                        "Dados gerados com sucesso no formato JSON. Você pode copiar para a área de transferência ou compartilhar diretamente como arquivo/mensagem.",
+                        "Dados gerados em JSON. Você pode salvar um arquivo de backup, copiar o conteúdo ou compartilhá-lo por outro aplicativo.",
                         fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -1421,6 +1436,20 @@ fun SettingsScreen(
                         shape = RoundedCornerShape(10.dp),
                         textStyle = androidx.compose.ui.text.TextStyle(fontSize = 10.sp)
                     )
+                    OutlinedButton(
+                        onClick = {
+                            val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
+                            val isSchedule = exportTitle.contains(".rvschedule")
+                            val prefix = if (isSchedule) "rotinaup_cronograma" else "rotinaup_backup"
+                            val extension = if (isSchedule) "rvschedule" else "rvbackup"
+                            createDocumentLauncher.launch("${prefix}_${timestamp}.${extension}")
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.SaveAlt, contentDescription = null, modifier = Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Salvar arquivo", fontSize = 12.sp)
+                    }
                 }
             },
             confirmButton = {
