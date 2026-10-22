@@ -640,25 +640,68 @@ object BackupManager {
                         db.settingsDao().insertAllAlarmEvents(payload.alarmEvents)
                     }
                 } else {
-                    // Merge mode: preserve existing, insert or update matching
-                    if (payload.habits.isNotEmpty()) {
-                        db.habitDao().insertAllHabits(payload.habits)
+                    // Merge mode: never trust IDs from another database. Match habits by
+                    // stable user-facing identity; otherwise create a fresh local ID.
+                    val habitDao = db.habitDao()
+                    val sleepDao = db.sleepDao()
+                    val settingsDao = db.settingsDao()
+                    val localHabits = (habitDao.getAllHabits().firstOrNull() ?: emptyList()).toMutableList()
+                    val importedHabitIds = mutableMapOf<Long, Long>()
+
+                    payload.habits.forEach { imported ->
+                        val matching = localHabits.firstOrNull {
+                            it.name.equals(imported.name, ignoreCase = true) && it.type == imported.type
+                        }
+                        if (matching != null) {
+                            importedHabitIds[imported.id] = matching.id
+                        } else {
+                            val now = System.currentTimeMillis()
+                            val newId = habitDao.insertHabit(
+                                imported.copy(id = 0L, createdAt = now, updatedAt = now)
+                            )
+                            importedHabitIds[imported.id] = newId
+                            localHabits.add(imported.copy(id = newId, createdAt = now, updatedAt = now))
+                        }
                     }
-                    if (payload.habitLogs.isNotEmpty()) {
-                        db.habitDao().insertAllLogs(payload.habitLogs)
+
+                    // Unique (habitId, date): keep local history if that day already exists.
+                    val localHabitLogs = habitDao.getAllLogs().firstOrNull() ?: emptyList()
+                    val existingHabitLogKeys = localHabitLogs.map { "${it.habitId}|${it.date}" }.toMutableSet()
+                    val logsToInsert = payload.habitLogs.mapNotNull { log ->
+                        val mappedHabitId = importedHabitIds[log.habitId] ?: return@mapNotNull null
+                        val key = "${mappedHabitId}|${log.date}"
+                        if (!existingHabitLogKeys.add(key)) null
+                        else log.copy(id = 0L, habitId = mappedHabitId)
                     }
-                    if (payload.sleepLogs.isNotEmpty()) {
-                        db.sleepDao().insertAllSleepLogs(payload.sleepLogs)
+                    if (logsToInsert.isNotEmpty()) habitDao.insertAllLogs(logsToInsert)
+
+                    // These tables have one record per date. Merge adds missing dates and
+                    // deliberately does not replace the user's existing entry for that date.
+                    val existingSleepDates = (sleepDao.getAllSleepLogs().firstOrNull() ?: emptyList())
+                        .map { it.date }.toSet()
+                    val sleepToInsert = payload.sleepLogs.filter { it.date !in existingSleepDates }
+                        .map { it.copy(id = 0L) }
+                    if (sleepToInsert.isNotEmpty()) sleepDao.insertAllSleepLogs(sleepToInsert)
+
+                    val existingNapDates = (sleepDao.getAllNapLogs().firstOrNull() ?: emptyList())
+                        .map { it.date }.toSet()
+                    val napsToInsert = payload.napLogs.filter { it.date !in existingNapDates }
+                        .map { it.copy(id = 0L) }
+                    if (napsToInsert.isNotEmpty()) sleepDao.insertAllNapLogs(napsToInsert)
+
+                    val existingReviewDates = (sleepDao.getAllDailyReviews().firstOrNull() ?: emptyList())
+                        .map { it.date }.toSet()
+                    val reviewsToInsert = payload.dailyReviews.filter { it.date !in existingReviewDates }
+                        .map { it.copy(id = 0L) }
+                    if (reviewsToInsert.isNotEmpty()) sleepDao.insertAllDailyReviews(reviewsToInsert)
+
+                    // Alarm events are append-only during merge and must point at the
+                    // corresponding local habit IDs; orphaned events are ignored.
+                    val alarmsToInsert = payload.alarmEvents.mapNotNull { event ->
+                        val mappedHabitId = importedHabitIds[event.habitId] ?: return@mapNotNull null
+                        event.copy(id = 0L, habitId = mappedHabitId)
                     }
-                    if (payload.napLogs.isNotEmpty()) {
-                        db.sleepDao().insertAllNapLogs(payload.napLogs)
-                    }
-                    if (payload.dailyReviews.isNotEmpty()) {
-                        db.sleepDao().insertAllDailyReviews(payload.dailyReviews)
-                    }
-                    if (payload.alarmEvents.isNotEmpty()) {
-                        db.settingsDao().insertAllAlarmEvents(payload.alarmEvents)
-                    }
+                    if (alarmsToInsert.isNotEmpty()) settingsDao.insertAllAlarmEvents(alarmsToInsert)
                 }
 
                 // 3. Settings update (Strictly preserve existing PIN, salt, hash, and requireAuth to prevent bypass)
