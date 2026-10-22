@@ -182,4 +182,24 @@ class SecurityUtilsTest {
         assertEquals(0, SecurityUtils.getFailedAttempts(context))
         assertEquals(0, SecurityUtils.getLockoutRemainingSeconds(context))
     }
+
+    @Test
+    fun `malformed PBKDF2 hashes are rejected and marked for upgrade`() {
+        val salt = "test-salt"
+        val malformedHashes = listOf(
+            "PBKDF2",
+            "PBKDF2\\$100000",
+            "PBKDF2\\$100000\\$too-short",
+            "PBKDF2\\$100000\\$" + "g".repeat(64),
+            "PBKDF2\\$600000\\$" + "a".repeat(64),
+            "PBKDF2\\$100000\\$" + "a".repeat(64) + "\\$extra"
+        )
+
+        malformedHashes.forEach { hash ->
+            val settings = UserSettings(requireAuth = true, pinHash = hash, pinSalt = salt)
+            assertTrue("Malformed/out-of-policy hash should need upgrade: $hash", SecurityUtils.needsUpgrade(settings))
+            assertFalse("Malformed hash must not verify: $hash", SecurityUtils.verifyPin("1234", settings))
+        }
+    }
+
 }
