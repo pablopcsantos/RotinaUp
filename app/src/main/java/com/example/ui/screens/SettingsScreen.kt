@@ -1308,35 +1308,43 @@ fun SettingsScreen(
                                     }
                                 }
 
-                                // Restore mode selection
-                                Text("Modo de Restauração:", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    RadioButton(
-                                        selected = replaceExistingMode,
-                                        onClick = { replaceExistingMode = true }
-                                    )
+                                if (prev.isScheduleOnly) {
                                     Text(
-                                        "Substituir Tudo (Recomendado)",
+                                        "Este arquivo contém apenas hábitos. A importação adicionará esses hábitos com novos identificadores e preservará seus registros e hábitos atuais.",
                                         fontSize = 11.sp,
-                                        modifier = Modifier.clickable { replaceExistingMode = true }
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
-                                }
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    RadioButton(
-                                        selected = !replaceExistingMode,
-                                        onClick = { replaceExistingMode = false }
-                                    )
-                                    Text(
-                                        "Mesclar com dados atuais",
-                                        fontSize = 11.sp,
-                                        modifier = Modifier.clickable { replaceExistingMode = false }
-                                    )
+                                } else {
+                                    // Restore mode selection
+                                    Text("Modo de Restauração:", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        RadioButton(
+                                            selected = replaceExistingMode,
+                                            onClick = { replaceExistingMode = true }
+                                        )
+                                        Text(
+                                            "Substituir Tudo (Recomendado)",
+                                            fontSize = 11.sp,
+                                            modifier = Modifier.clickable { replaceExistingMode = true }
+                                        )
+                                    }
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        RadioButton(
+                                            selected = !replaceExistingMode,
+                                            onClick = { replaceExistingMode = false }
+                                        )
+                                        Text(
+                                            "Mesclar com dados atuais",
+                                            fontSize = 11.sp,
+                                            modifier = Modifier.clickable { replaceExistingMode = false }
+                                        )
+                                    }
                                 }
                             }
                         }
