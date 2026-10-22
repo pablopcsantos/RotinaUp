@@ -427,4 +427,40 @@ class BackupRestoreTest {
         assertEquals("Sono local", sleepLogs.single().note)
     }
 
+
+    @Test
+    fun `merge does not collapse duplicate imported habits into one local habit`() = runBlocking {
+        val habitDao = db.habitDao()
+        val localId = habitDao.insertHabit(
+            Habit(name = "Hábito repetido", type = "FOCUS", targetTime = "08:00")
+        )
+        val backupJson = """
+            {
+              "schemaVersion": 1,
+              "appName": "RotinaUp",
+              "habits": [
+                { "id": 101, "name": "Hábito repetido", "type": "FOCUS", "targetTime": "08:00" },
+                { "id": 102, "name": "Hábito repetido", "type": "FOCUS", "targetTime": "09:00" }
+              ],
+              "habitLogs": [
+                { "id": 201, "habitId": 101, "date": "2026-10-20", "status": "DONE" },
+                { "id": 202, "habitId": 102, "date": "2026-10-21", "status": "DONE" }
+              ]
+            }
+        """.trimIndent()
+        val validation = BackupManager.validateBackupJson(backupJson) as BackupValidationResult.Success
+
+        val result = BackupManager.restoreBackup(context, db, validation.payload, replaceExisting = false)
+        assertTrue(result.success)
+
+        val habits = habitDao.getAllHabits().first()
+        assertEquals(2, habits.size)
+        val logs = habitDao.getAllLogs().first()
+        assertEquals(2, logs.size)
+        assertTrue(logs.any { it.date == "2026-10-20" && it.habitId == localId })
+        val secondHabitId = logs.single { it.date == "2026-10-21" }.habitId
+        assertNotEquals(localId, secondHabitId)
+        assertTrue(habits.any { it.id == secondHabitId })
+    }
+
 }
