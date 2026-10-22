@@ -38,10 +38,15 @@ object SecurityUtils {
     fun hashPinPbkdf2(pin: String, salt: String, iterations: Int = PBKDF2_ITERATIONS): String {
         val safeIterations = iterations.coerceIn(MIN_SAFE_ITERATIONS, MAX_SAFE_ITERATIONS)
         val spec = PBEKeySpec(pin.toCharArray(), salt.toByteArray(Charsets.UTF_8), safeIterations, KEY_LENGTH)
-        val factory = SecretKeyFactory.getInstance(PBKDF2_ALGORITHM)
-        val hashBytes = factory.generateSecret(spec).encoded
-        val hex = hashBytes.joinToString("") { "%02x".format(it) }
-        return "PBKDF2\$$safeIterations\$$hex"
+        try {
+            val factory = SecretKeyFactory.getInstance(PBKDF2_ALGORITHM)
+            val hashBytes = factory.generateSecret(spec).encoded
+            val hex = hashBytes.joinToString("") { "%02x".format(it) }
+            return "PBKDF2\$$safeIterations\$$hex"
+        } finally {
+            // Clear the mutable password copy held by PBEKeySpec as soon as derivation finishes.
+            spec.clearPassword()
+        }
     }
 
     /**
