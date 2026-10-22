@@ -14,6 +14,7 @@ object SecurityUtils {
     const val MIN_SAFE_ITERATIONS = 1000
     const val MAX_SAFE_ITERATIONS = 500000
     private const val KEY_LENGTH = 256
+    private const val HASH_HEX_LENGTH = KEY_LENGTH / 4
     private const val PREFS_NAME = "rotinaup_security_prefs"
     private const val PREF_FAILED_ATTEMPTS = "failed_pin_attempts"
     private const val PREF_LOCKOUT_UNTIL = "pin_lockout_until_ms"
@@ -65,10 +66,16 @@ object SecurityUtils {
         // Modern: PBKDF2 salted derivation
         if (!storedHash.isNullOrBlank() && storedHash.startsWith("PBKDF2$") && !salt.isNullOrBlank()) {
             val parts = storedHash.split("$")
-            if (parts.size >= 3) {
+            if (parts.size == 3) {
                 val iterations = parts[1].toIntOrNull()
-                // Reject invalid or out-of-bounds iteration parameters
-                if (iterations == null || iterations !in MIN_SAFE_ITERATIONS..MAX_SAFE_ITERATIONS) {
+                val storedKey = parts[2]
+                // Reject malformed hashes and out-of-bounds iteration parameters before deriving a key.
+                if (
+                    iterations == null ||
+                    iterations !in MIN_SAFE_ITERATIONS..MAX_SAFE_ITERATIONS ||
+                    storedKey.length != HASH_HEX_LENGTH ||
+                    !storedKey.matches(Regex("[0-9a-fA-F]+"))
+                ) {
                     return false
                 }
                 val computed = hashPinPbkdf2(enteredPin, salt, iterations)
@@ -98,7 +105,20 @@ object SecurityUtils {
         if (!settings.pinCode.isNullOrBlank()) return true
         val hash = settings.pinHash ?: return false
         if (!hash.startsWith("PBKDF2$")) return true
-        val iterations = hash.split("$").getOrNull(1)?.toIntOrNull() ?: 0
+
+        val parts = hash.split("$")
+        if (parts.size != 3) return true
+
+        val iterations = parts[1].toIntOrNull() ?: return true
+        val encodedKey = parts[2]
+        if (
+            iterations !in MIN_SAFE_ITERATIONS..MAX_SAFE_ITERATIONS ||
+            encodedKey.length != HASH_HEX_LENGTH ||
+            !encodedKey.matches(Regex("[0-9a-fA-F]+"))
+        ) {
+            return true
+        }
+
         return iterations < PBKDF2_ITERATIONS
     }
 
