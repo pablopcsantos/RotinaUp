@@ -18,10 +18,10 @@ RotinaUp é um aplicativo Android nativo construído com **Kotlin**, **Jetpack C
 ## 🛡️ Segurança e Privacidade
 
 - **100% Offline:** Não há envio de telemetria ou dados pessoais para servidores externos. Todos os hábitos, avaliações diárias e registros de sono permanecem exclusivamente no dispositivo.
-- **Proteção por PIN com PBKDF2:** Utiliza derivação lenta de chave via `PBKDF2WithHmacSHA256` (10.000 iterações, 256 bits e salt de 16 bytes), prevenindo ataques de dicionário offline caso os dados sejam inspecionados.
+- **Proteção por PIN com PBKDF2:** Utiliza `PBKDF2WithHmacSHA256` com 100.000 iterações por padrão e chave derivada de 256 bits. O salt é gerado com 16 bytes aleatórios criptograficamente seguros e armazenado em formato hexadecimal.
 - **Comparação em Tempo Constante:** Previne ataques de canal lateral baseados em temporização (`MessageDigest.isEqual`).
 - **Prevenção de Bypass na Inicialização:** O estado de autenticação (`AuthState`) é controlado centralmente no `MainViewModel`. O aplicativo nunca expõe interfaces protegidas enquanto as configurações do Room ainda estão sendo carregadas da mídia local.
-- **Bloqueio Persistente Contra Força Bruta:** O contador de tentativas incorretas e o tempo de penalização (15s a 30s) persistem mesmo se o processo do aplicativo for forçado a fechar ou o dispositivo for reiniciado.
+- **Bloqueio Persistente Contra Força Bruta:** O contador de tentativas incorretas e os prazos de bloqueio persistem entre reinicializações do processo e do dispositivo. A penalização cresce após falhas consecutivas: 15 s, 30 s, 60 s e 300 s nas tentativas seguintes.
 - **Política de Backup Controlada:** As regras em `backup_rules.xml` e `data_extraction_rules.xml` incluem o banco de rotina para preservação pessoal e excluem expressamente arquivos de contadores de tentativas de segurança.
 
 ---
@@ -44,25 +44,25 @@ GEMINI_API_KEY=sua_chave_aqui
 ### Comandos de Build
 ```bash
 # Compilar versão Debug
-gradle assembleDebug
+./gradlew assembleDebug
 
 # Executar testes unitários e testes locais Robolectric
-gradle :app:testDebugUnitTest
+./gradlew :app:testDebugUnitTest
 
 # Gerar pacote de Release
 # Requer as variáveis de ambiente de assinatura configuradas:
 export KEYSTORE_PATH="/caminho/para/my-upload-key.jks"
 export STORE_PASSWORD="senha_do_keystore"
 export KEY_PASSWORD="senha_da_chave"
-gradle assembleRelease
+./gradlew assembleRelease
 ```
 
 ### Integração Contínua (CI/CD)
 O repositório possui automação com GitHub Actions em `.github/workflows/android.yml`:
 - Executa compilação limpa do projeto com JDK 21.
-- Roda toda a suíte de testes unitários e testes Robolectric (`gradle :app:testDebugUnitTest`).
-- Valida o schema exportado do Room Database (`exportSchema = true`) gerado via KSP.
-- Para releases automatizadas no GitHub Actions, cadastre as secrets: `KEYSTORE_BASE64`, `STORE_PASSWORD` e `KEY_PASSWORD`.
+- Executa a suíte de testes unitários e Robolectric (`./gradlew :app:testDebugUnitTest`).
+- A compilação usa KSP para gerar o schema exportado do Room (`exportSchema = true`); o workflow atual não executa uma etapa independente de comparação/validação do schema.
+- O workflow atual executa testes e compila o APK Debug; ele não publica releases nem compila a variante Release. Para compilar Release localmente com assinatura, configure `KEYSTORE_PATH`, `STORE_PASSWORD` e `KEY_PASSWORD` como variáveis de ambiente; `KEY_ALIAS` é opcional (padrão: `upload`). Sem um keystore válido, a variante Release pode ser compilada sem assinatura.
 
 ---
 
