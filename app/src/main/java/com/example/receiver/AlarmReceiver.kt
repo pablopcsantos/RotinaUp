@@ -31,8 +31,10 @@ class AlarmReceiver : BroadcastReceiver() {
                 when (action) {
                     Intent.ACTION_BOOT_COMPLETED,
                     Intent.ACTION_TIME_CHANGED,
-                    Intent.ACTION_TIMEZONE_CHANGED -> {
+                    Intent.ACTION_TIMEZONE_CHANGED,
+                    Intent.ACTION_DATE_CHANGED -> {
                         AlarmScheduler.rescheduleAllAlarmsSuspend(context)
+                        com.example.widget.RotinaUpWidgetProvider.updateAllWidgets(context)
                     }
 
                     AlarmScheduler.ACTION_HABIT_REMINDER -> {
@@ -73,7 +75,7 @@ class AlarmReceiver : BroadcastReceiver() {
         }
     }
 
-    private suspend fun handleHabitReminder(context: Context, habitId: Long, isSnooze: Boolean = false) {
+    internal suspend fun handleHabitReminder(context: Context, habitId: Long, isSnooze: Boolean = false) {
         val db = AppDatabase.getDatabase(context)
         val habits = db.habitDao().getAllActiveHabits().firstOrNull() ?: emptyList()
         val habit = habits.find { it.id == habitId } ?: return
@@ -135,7 +137,7 @@ class AlarmReceiver : BroadcastReceiver() {
         )
 
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle("RotinaUp: ${habit.name}")
             .setContentText("Horário previsto: ${habit.targetTime}. Mantenha seu ritmo de hábitos hoje!")
             .setPriority(NotificationCompat.PRIORITY_HIGH)
@@ -161,7 +163,7 @@ class AlarmReceiver : BroadcastReceiver() {
         }
     }
 
-    private suspend fun handleMandatoryReminder(context: Context) {
+    internal suspend fun handleMandatoryReminder(context: Context) {
         val db = AppDatabase.getDatabase(context)
         val settings = db.settingsDao().getSettings().firstOrNull() ?: return
         if (!settings.notificationsEnabled || !settings.mandatoryRemindersEnabled) return
@@ -195,7 +197,7 @@ class AlarmReceiver : BroadcastReceiver() {
         }
 
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle("RotinaUp: Etapas Obrigatórias")
             .setContentText("$missingText Toque para preencher antes de dormir.")
             .setPriority(NotificationCompat.PRIORITY_HIGH)
@@ -217,7 +219,7 @@ class AlarmReceiver : BroadcastReceiver() {
         } catch (_: SecurityException) {}
     }
 
-    private suspend fun handleQuickDone(context: Context, habitId: Long) {
+    internal suspend fun handleQuickDone(context: Context, habitId: Long) {
         val db = AppDatabase.getDatabase(context)
         val habits = db.habitDao().getAllActiveHabits().firstOrNull() ?: emptyList()
         val habit = habits.find { it.id == habitId } ?: return
@@ -235,7 +237,7 @@ class AlarmReceiver : BroadcastReceiver() {
         com.example.widget.RotinaUpWidgetProvider.updateAllWidgets(context)
     }
 
-    private fun handleSnooze(context: Context, habitId: Long) {
+    internal fun handleSnooze(context: Context, habitId: Long) {
         NotificationManagerCompat.from(context).cancel(habitId.toInt())
         val intent = Intent(context, AlarmReceiver::class.java).apply {
             action = AlarmScheduler.ACTION_HABIT_SNOOZE_FIRE

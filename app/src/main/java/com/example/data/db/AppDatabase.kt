@@ -98,5 +98,10 @@ abstract class AppDatabase : RoomDatabase() {
                 instance
             }
         }
+
+        @androidx.annotation.VisibleForTesting
+        fun setInstance(instance: AppDatabase?) {
+            INSTANCE = instance
+        }
     }
 }

@@ -115,12 +115,12 @@ class DatabaseOperationsTest {
                 androidx.sqlite.db.SupportSQLiteOpenHelper.Configuration.builder(context)
                     .name(null) // in-memory SQLite database
                     .callback(object : androidx.sqlite.db.SupportSQLiteOpenHelper.Callback(1) {
-                        override fun onCreate(sDb: androidx.sqlite.db.SupportSQLiteDatabase) {
+                        override fun onCreate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
                             // Version 1 tables
-                            sDb.execSQL("CREATE TABLE IF NOT EXISTS habitos (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, name TEXT NOT NULL, type TEXT NOT NULL, targetTime TEXT NOT NULL, daysOfWeek TEXT NOT NULL, durationMinutes INTEGER NOT NULL, streakCount INTEGER NOT NULL, reminderSound TEXT NOT NULL, ringDurationMinutes INTEGER NOT NULL, dismissPhrase TEXT NOT NULL, isActive INTEGER NOT NULL, positiveConsequence TEXT NOT NULL, negativeConsequence TEXT NOT NULL, lastCompletedDate TEXT, createdAt INTEGER NOT NULL, updatedAt INTEGER NOT NULL)")
-                            sDb.execSQL("CREATE TABLE IF NOT EXISTS user_settings (id INTEGER PRIMARY KEY NOT NULL, notificationsEnabled INTEGER NOT NULL, sleepGoalMinutes INTEGER NOT NULL, bedtimeTarget TEXT NOT NULL, wakeTarget TEXT NOT NULL, requireAuth INTEGER NOT NULL, pinCode TEXT, themeMode TEXT NOT NULL, lastBackupAt INTEGER, overdueRemindersEnabled INTEGER NOT NULL, overdueIntervalMinutes INTEGER NOT NULL, overdueAlarmSound INTEGER NOT NULL, isDummyActive INTEGER NOT NULL, hasSeenDummyPrompt INTEGER NOT NULL, typeSleepName TEXT NOT NULL, typeFocusName TEXT NOT NULL, typeExerciseName TEXT NOT NULL, typeWaterName TEXT NOT NULL, typeCustomName TEXT NOT NULL)")
+                            db.execSQL("CREATE TABLE IF NOT EXISTS habitos (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, name TEXT NOT NULL, type TEXT NOT NULL, targetTime TEXT NOT NULL, daysOfWeek TEXT NOT NULL, durationMinutes INTEGER NOT NULL, streakCount INTEGER NOT NULL, reminderSound TEXT NOT NULL, ringDurationMinutes INTEGER NOT NULL, dismissPhrase TEXT NOT NULL, isActive INTEGER NOT NULL, positiveConsequence TEXT NOT NULL, negativeConsequence TEXT NOT NULL, lastCompletedDate TEXT, createdAt INTEGER NOT NULL, updatedAt INTEGER NOT NULL)")
+                            db.execSQL("CREATE TABLE IF NOT EXISTS user_settings (id INTEGER PRIMARY KEY NOT NULL, notificationsEnabled INTEGER NOT NULL, sleepGoalMinutes INTEGER NOT NULL, bedtimeTarget TEXT NOT NULL, wakeTarget TEXT NOT NULL, requireAuth INTEGER NOT NULL, pinCode TEXT, themeMode TEXT NOT NULL, lastBackupAt INTEGER, overdueRemindersEnabled INTEGER NOT NULL, overdueIntervalMinutes INTEGER NOT NULL, overdueAlarmSound INTEGER NOT NULL, isDummyActive INTEGER NOT NULL, hasSeenDummyPrompt INTEGER NOT NULL, typeSleepName TEXT NOT NULL, typeFocusName TEXT NOT NULL, typeExerciseName TEXT NOT NULL, typeWaterName TEXT NOT NULL, typeCustomName TEXT NOT NULL)")
                         }
-                        override fun onUpgrade(sDb: androidx.sqlite.db.SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) {}
+                        override fun onUpgrade(db: androidx.sqlite.db.SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) {}
                     })
                     .build()
             )
