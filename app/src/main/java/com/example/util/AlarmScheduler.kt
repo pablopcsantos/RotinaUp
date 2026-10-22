@@ -257,19 +257,30 @@ object AlarmScheduler {
         return null
     }
 
-    private fun calculateTodayOrTomorrowTime(timeStr: String): Long {
+    internal fun calculateTodayOrTomorrowTime(
+        timeStr: String,
+        nowMillis: Long = System.currentTimeMillis()
+    ): Long {
         val parts = timeStr.split(":")
-        val hour = parts.getOrNull(0)?.toIntOrNull() ?: 22
-        val min = parts.getOrNull(1)?.toIntOrNull() ?: 0
+        val parsedHour = parts.getOrNull(0)?.toIntOrNull()
+        val parsedMinute = parts.getOrNull(1)?.toIntOrNull()
+        val isValid = parts.size == 2 &&
+            parsedHour != null && parsedHour in 0..23 &&
+            parsedMinute != null && parsedMinute in 0..59
+        // Fall back to the established default deadline rather than allowing Calendar
+        // to silently normalize malformed settings such as "99:99".
+        val hour = if (isValid) parsedHour!! else 22
+        val minute = if (isValid) parsedMinute!! else 0
 
         val cal = Calendar.getInstance().apply {
+            timeInMillis = nowMillis
             set(Calendar.HOUR_OF_DAY, hour)
-            set(Calendar.MINUTE, min)
+            set(Calendar.MINUTE, minute)
             set(Calendar.SECOND, 0)
             set(Calendar.MILLISECOND, 0)
         }
 
-        if (cal.timeInMillis <= System.currentTimeMillis()) {
+        if (cal.timeInMillis <= nowMillis) {
             cal.add(Calendar.DAY_OF_YEAR, 1)
         }
         return cal.timeInMillis

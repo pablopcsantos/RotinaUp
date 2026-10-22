@@ -62,6 +62,11 @@ fun SettingsScreen(
     var newCustomTypeName by remember { mutableStateOf("") }
     var mandatoryDeadline by remember(settings) { mutableStateOf(settings.mandatoryDeadlineTime) }
 
+    fun isValidDeadlineTime(value: String): Boolean {
+        val match = Regex("^(?:[01]\\d|2[0-3]):[0-5]\\d$").matchEntire(value.trim())
+        return match != null
+    }
+
     fun copyToClipboard(label: String, text: String) {
         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         val clip = ClipData.newPlainText(label, text).apply {
@@ -623,7 +628,7 @@ fun SettingsScreen(
                                     value = mandatoryDeadline,
                                     onValueChange = {
                                         mandatoryDeadline = it
-                                        if (it.length == 5 && it.contains(":")) {
+                                        if (isValidDeadlineTime(it)) {
                                             viewModel.updateSettings(settings.copy(mandatoryDeadlineTime = it.trim()))
                                         }
                                     },
@@ -639,9 +644,13 @@ fun SettingsScreen(
                                 Spacer(modifier = Modifier.width(8.dp))
                                 FilledTonalButton(
                                     onClick = {
-                                        val valid = mandatoryDeadline.trim().ifBlank { "22:00" }
-                                        viewModel.updateSettings(settings.copy(mandatoryDeadlineTime = valid))
-                                        viewModel.showToast("Horário limite salvo: $valid")
+                                        if (isValidDeadlineTime(mandatoryDeadline)) {
+                                            val valid = mandatoryDeadline.trim()
+                                            viewModel.updateSettings(settings.copy(mandatoryDeadlineTime = valid))
+                                            viewModel.showToast("Horário limite salvo: $valid")
+                                        } else {
+                                            viewModel.showToast("Horário inválido. Use HH:mm, entre 00:00 e 23:59.")
+                                        }
                                     },
                                     shape = RoundedCornerShape(14.dp)
                                 ) {
