@@ -53,4 +53,28 @@ class AlarmSchedulerTest {
         assertNull(AlarmScheduler.calculateNextTriggerTime("08:00", "", now))
         assertNull(AlarmScheduler.calculateNextTriggerTime("08:00", "0,8,invalid", now))
     }
+    @Test
+    fun `mandatory deadline schedules later today when deadline has not passed`() {
+        val now = localTime(2026, Calendar.OCTOBER, 19, 21, 30)
+        val expected = localTime(2026, Calendar.OCTOBER, 19, 22, 0)
+
+        assertEquals(expected, AlarmScheduler.calculateTodayOrTomorrowTime("22:00", now))
+    }
+
+    @Test
+    fun `mandatory deadline schedules tomorrow when deadline has passed`() {
+        val now = localTime(2026, Calendar.OCTOBER, 19, 22, 0)
+        val expected = localTime(2026, Calendar.OCTOBER, 20, 22, 0)
+
+        assertEquals(expected, AlarmScheduler.calculateTodayOrTomorrowTime("22:00", now))
+    }
+
+    @Test
+    fun `invalid mandatory deadline falls back to 22 00 instead of calendar normalization`() {
+        val now = localTime(2026, Calendar.OCTOBER, 19, 21, 0)
+        val expected = localTime(2026, Calendar.OCTOBER, 19, 22, 0)
+
+        assertEquals(expected, AlarmScheduler.calculateTodayOrTomorrowTime("99:99", now))
+        assertEquals(expected, AlarmScheduler.calculateTodayOrTomorrowTime("not-a-time", now))
+    }
 }
