@@ -44,7 +44,9 @@ data class BackupPayload(
     val napLogs: List<NapLog> = emptyList(),
     val dailyReviews: List<DailyReview> = emptyList(),
     val alarmEvents: List<AlarmEvent> = emptyList(),
-    val settings: UserSettingsExport? = null
+    val settings: UserSettingsExport? = null,
+    /** True for schedule/legacy habits-only files that must never erase tracking history. */
+    val isScheduleOnly: Boolean = false
 )
 
 data class BackupPreview(
@@ -288,7 +290,8 @@ object BackupManager {
                     schemaVersion = 1,
                     appName = "RotinaUp",
                     exportedAt = now,
-                    habits = habits
+                    habits = habits,
+                    isScheduleOnly = true
                 )
                 val preview = BackupPreview(
                     schemaVersion = 1,
@@ -323,6 +326,10 @@ object BackupManager {
 
                 val schemaVersion = root.optInt("schemaVersion", 1)
                 val appName = root.optString("appName", root.optString("app", "RotinaUp"))
+                // Older .rvbackup exports contained habits only. Treat them as partial imports
+                // so restoring them cannot erase logs, sleep records, reviews, or alarm events.
+                val habitsOnly = hasHabits && !hasLogs && !hasSleep && !hasNaps && !hasReviews &&
+                    !root.has("alarmEvents") && !root.has("settings")
                 val exportedAt = root.optLong("exportedAt", root.optLong("timestamp", System.currentTimeMillis()))
                 val formattedDate = root.optString("exportedDateStr").ifBlank {
                     SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(exportedAt))
@@ -512,7 +519,8 @@ object BackupManager {
                     napLogs = parsedNaps,
                     dailyReviews = parsedReviews,
                     alarmEvents = parsedAlarms,
-                    settings = parsedSettings
+                    settings = parsedSettings,
+                    isScheduleOnly = habitsOnly
                 )
 
                 val preview = BackupPreview(
@@ -597,7 +605,13 @@ object BackupManager {
     ): RestoreResult = withContext(Dispatchers.IO) {
         try {
             db.withTransaction {
-                if (replaceExisting) {
+                if (payload.isScheduleOnly) {
+                    // Schedule/legacy habits-only imports are additive and never erase history.
+                    // Use fresh IDs so imported habits cannot overwrite local habits with colliding IDs.
+                    val now = System.currentTimeMillis()
+                    val importedHabits = payload.habits.map { it.copy(id = 0L, createdAt = now, updatedAt = now) }
+                    if (importedHabits.isNotEmpty()) db.habitDao().insertAllHabits(importedHabits)
+                } else if (replaceExisting) {
                     // 1. Wipe old records
                     db.habitDao().deleteAllHabits()
                     db.habitDao().deleteAllLogs()
@@ -649,7 +663,9 @@ object BackupManager {
 
                 // 3. Settings update (Strictly preserve existing PIN, salt, hash, and requireAuth to prevent bypass)
                 val currentSettings = db.settingsDao().getSettings().firstOrNull() ?: UserSettings()
-                val updatedSettings = if (payload.settings != null) {
+                val updatedSettings = if (payload.isScheduleOnly) {
+                    currentSettings.copy(hasSeededInitialData = true)
+                } else if (payload.settings != null) {
                     currentSettings.copy(
                         notificationsEnabled = payload.settings.notificationsEnabled,
                         sleepGoalMinutes = payload.settings.sleepGoalMinutes,
