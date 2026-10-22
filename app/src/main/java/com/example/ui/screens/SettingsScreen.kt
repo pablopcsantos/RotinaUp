@@ -876,7 +876,7 @@ fun SettingsScreen(
                 }
             }
 
-            // ==================== 8. GERENCIAMENTO DE DADOS (CRONOGRAMA & BACKUP) ====================
+            // ==================== 8. EXPORTAÇÃO DE DADOS (CRONOGRAMA & BACKUP DE HÁBITOS) ====================
             item {
                 Card(
                     shape = RoundedCornerShape(22.dp),
@@ -923,8 +923,13 @@ fun SettingsScreen(
 
                         Spacer(modifier = Modifier.height(12.dp))
 
-                        // Backup Completo
-                        Text("Backup Completo (.rvbackup)", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        // Este arquivo contém hábitos, não um backup completo do banco de dados.
+                        Text("Backup de Hábitos (.rvbackup)", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(
+                            "Inclui configurações dos hábitos, mas não inclui histórico, registros de sono ou configurações gerais.",
+                            fontSize = 10.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                         Spacer(modifier = Modifier.height(4.dp))
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -933,7 +938,8 @@ fun SettingsScreen(
                             Button(
                                 onClick = {
                                     val backupObj = JSONObject()
-                                    backupObj.put("app", "Rotina Viva")
+                                    backupObj.put("app", "RotinaUp")
+                                    backupObj.put("formatVersion", 1)
                                     backupObj.put("timestamp", System.currentTimeMillis())
                                     val habArr = JSONArray()
                                     habits.forEach { h ->
@@ -944,11 +950,18 @@ fun SettingsScreen(
                                         obj.put("targetTime", h.targetTime)
                                         obj.put("durationMinutes", h.durationMinutes)
                                         obj.put("daysOfWeek", h.daysOfWeek)
+                                        obj.put("priority", h.priority)
+                                        obj.put("isActive", h.isActive)
+                                        obj.put("showInWidget", h.showInWidget)
+                                        obj.put("positiveConsequence", h.positiveConsequence)
+                                        obj.put("negativeConsequence", h.negativeConsequence)
                                         obj.put("dismissPhrase", h.dismissPhrase)
+                                        obj.put("createdAt", h.createdAt)
+                                        obj.put("updatedAt", h.updatedAt)
                                         habArr.put(obj)
                                     }
                                     backupObj.put("habits", habArr)
-                                    copyToClipboard("Backup Completo (.rvbackup)", backupObj.toString(2))
+                                    copyToClipboard("Backup de Hábitos (.rvbackup)", backupObj.toString(2))
                                 },
                                 shape = RoundedCornerShape(12.dp),
                                 modifier = Modifier.weight(1f)
