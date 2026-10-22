@@ -535,7 +535,7 @@ object BackupManager {
                     dailyReviewsCount = parsedReviews.size,
                     alarmEventsCount = parsedAlarms.size,
                     hasSettings = parsedSettings != null,
-                    isScheduleOnly = false
+                    isScheduleOnly = habitsOnly
                 )
 
                 return BackupValidationResult.Success(preview, payload)
