@@ -463,4 +463,60 @@ class BackupRestoreTest {
         assertTrue(habits.any { it.id == secondHabitId })
     }
 
+
+    @Test
+    fun `merge does not duplicate alarm events already present locally`() = runBlocking {
+        val habitDao = db.habitDao()
+        val settingsDao = db.settingsDao()
+        val localHabitId = habitDao.insertHabit(
+            Habit(name = "Hábito com alarme", type = "FOCUS", targetTime = "08:00")
+        )
+        val scheduledAt = 1_729_600_000_000L
+        val dismissedAt = scheduledAt + 15_000L
+        settingsDao.insertAlarmEvent(
+            AlarmEvent(
+                habitId = localHabitId,
+                habitName = "Hábito com alarme",
+                scheduledAt = scheduledAt,
+                dismissedAt = dismissedAt,
+                dismissAttempts = 2,
+                snoozed = false,
+                typedText = "confirmado"
+            )
+        )
+
+        val backupJson = """
+            {
+              "schemaVersion": 1,
+              "appName": "RotinaUp",
+              "habits": [
+                { "id": 77, "name": "Hábito com alarme", "type": "FOCUS", "targetTime": "08:00" }
+              ],
+              "alarmEvents": [
+                {
+                  "id": 900,
+                  "habitId": 77,
+                  "habitName": "Hábito com alarme",
+                  "scheduledAt": $scheduledAt,
+                  "dismissedAt": $dismissedAt,
+                  "dismissAttempts": 2,
+                  "snoozed": false,
+                  "typedText": "confirmado"
+                }
+              ]
+            }
+        """.trimIndent()
+        val validation = BackupManager.validateBackupJson(backupJson) as BackupValidationResult.Success
+
+        val firstImport = BackupManager.restoreBackup(context, db, validation.payload, replaceExisting = false)
+        assertTrue(firstImport.success)
+        val secondImport = BackupManager.restoreBackup(context, db, validation.payload, replaceExisting = false)
+        assertTrue(secondImport.success)
+
+        val events = settingsDao.getAllAlarmEvents().first()
+        assertEquals(1, events.size)
+        assertEquals(localHabitId, events.single().habitId)
+        assertEquals(scheduledAt, events.single().scheduledAt)
+    }
+
 }
