@@ -23,12 +23,25 @@ android {
   }
 
   signingConfigs {
-    create("release") {
-      val keystorePath = System.getenv("KEYSTORE_PATH") ?: "${rootDir}/my-upload-key.jks"
-      storeFile = file(keystorePath)
-      storePassword = System.getenv("STORE_PASSWORD")
-      keyAlias = "upload"
-      keyPassword = System.getenv("KEY_PASSWORD")
+    // Only configure release signing when a complete, existing keystore is supplied.
+    // Developer machines and CI can still assemble an unsigned release APK otherwise.
+    val keystorePath = System.getenv("KEYSTORE_PATH")
+    val storePasswordValue = System.getenv("STORE_PASSWORD")
+    val keyPasswordValue = System.getenv("KEY_PASSWORD")
+    val keyAliasValue = System.getenv("KEY_ALIAS") ?: "upload"
+
+    if (
+      !keystorePath.isNullOrBlank() &&
+      !storePasswordValue.isNullOrBlank() &&
+      !keyPasswordValue.isNullOrBlank() &&
+      file(keystorePath).isFile
+    ) {
+      create("release") {
+        storeFile = file(keystorePath)
+        storePassword = storePasswordValue
+        keyAlias = keyAliasValue
+        keyPassword = keyPasswordValue
+      }
     }
   }
 
@@ -37,7 +50,9 @@ android {
       isCrunchPngs = false
       isMinifyEnabled = false
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-      signingConfig = signingConfigs.getByName("release")
+      if (signingConfigs.findByName("release") != null) {
+        signingConfig = signingConfigs.getByName("release")
+      }
     }
     // Use Android Gradle Plugin's standard debug signing config. It generates the
     // local debug keystore when needed and avoids depending on a committed file.
