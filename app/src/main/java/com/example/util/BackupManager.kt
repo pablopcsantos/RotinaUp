@@ -524,8 +524,15 @@ object BackupManager {
                     }
                     for (key in integerKeys) {
                         val value = if (sObj.has(key)) sObj.opt(key) else null
-                        if (sObj.has(key) && (value !is Number || value.toDouble() % 1.0 != 0.0)) {
-                            return BackupValidationResult.Error("A configuração '$key' precisa ser um número inteiro.")
+                        if (sObj.has(key) && (
+                                value !is Number ||
+                                    !value.toDouble().isFinite() ||
+                                    value.toDouble() % 1.0 != 0.0 ||
+                                    value.toDouble() < Int.MIN_VALUE.toDouble() ||
+                                    value.toDouble() > Int.MAX_VALUE.toDouble()
+                            )
+                        ) {
+                            return BackupValidationResult.Error("A configuração '$key' precisa ser um número inteiro válido.")
                         }
                     }
                     for (key in stringKeys) {
