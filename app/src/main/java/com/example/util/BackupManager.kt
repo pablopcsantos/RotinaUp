@@ -474,54 +474,54 @@ object BackupManager {
                     }
                 }
 
-                // Parse Alarm Events
+                // Parse Alarm Events. Never silently discard malformed sections/items:
+                // a partial restore could otherwise appear successful while losing history.
                 val parsedAlarms = mutableListOf<AlarmEvent>()
                 if (root.has("alarmEvents")) {
                     val aArr = root.optJSONArray("alarmEvents")
-                    if (aArr != null) {
-                        for (i in 0 until aArr.length()) {
-                            val item = aArr.optJSONObject(i) ?: continue
-                            parsedAlarms.add(
-                                AlarmEvent(
-                                    id = item.optLong("id", 0L),
-                                    habitId = item.optLong("habitId", 0L),
-                                    habitName = item.optString("habitName", "Hábito"),
-                                    scheduledAt = item.optLong("scheduledAt", System.currentTimeMillis()),
-                                    dismissedAt = item.optLong("dismissedAt", System.currentTimeMillis()),
-                                    dismissAttempts = item.optInt("dismissAttempts", 1),
-                                    snoozed = item.optBoolean("snoozed", false),
-                                    typedText = item.optString("typedText", "")
-                                )
+                        ?: return BackupValidationResult.Error("O campo 'alarmEvents' precisa ser uma lista válida.")
+                    for (i in 0 until aArr.length()) {
+                        val item = aArr.optJSONObject(i)
+                            ?: return BackupValidationResult.Error("Evento de alarme no índice ${i + 1} inválido.")
+                        parsedAlarms.add(
+                            AlarmEvent(
+                                id = item.optLong("id", 0L),
+                                habitId = item.optLong("habitId", 0L),
+                                habitName = item.optString("habitName", "Hábito"),
+                                scheduledAt = item.optLong("scheduledAt", System.currentTimeMillis()),
+                                dismissedAt = item.optLong("dismissedAt", System.currentTimeMillis()),
+                                dismissAttempts = item.optInt("dismissAttempts", 1),
+                                snoozed = item.optBoolean("snoozed", false),
+                                typedText = item.optString("typedText", "")
                             )
-                        }
+                        )
                     }
                 }
 
                 // Parse Settings
                 val parsedSettings: UserSettingsExport? = if (root.has("settings")) {
                     val sObj = root.optJSONObject("settings")
-                    if (sObj != null) {
-                        UserSettingsExport(
-                            notificationsEnabled = sObj.optBoolean("notificationsEnabled", true),
-                            sleepGoalMinutes = sObj.optInt("sleepGoalMinutes", 480),
-                            bedtimeTarget = sObj.optString("bedtimeTarget", "23:00"),
-                            wakeTarget = sObj.optString("wakeTarget", "07:00"),
-                            themeMode = sObj.optString("themeMode", "light"),
-                            overdueRemindersEnabled = sObj.optBoolean("overdueRemindersEnabled", true),
-                            overdueIntervalMinutes = sObj.optInt("overdueIntervalMinutes", 15),
-                            overdueAlarmSound = sObj.optBoolean("overdueAlarmSound", true),
-                            typeSleepName = sObj.optString("typeSleepName", "Sono"),
-                            typeFocusName = sObj.optString("typeFocusName", "Foco"),
-                            typeExerciseName = sObj.optString("typeExerciseName", "Exercício"),
-                            typeWaterName = sObj.optString("typeWaterName", "Água"),
-                            typeCustomName = sObj.optString("typeCustomName", "Personalizado"),
-                            customHabitTypes = sObj.optString("customHabitTypes", "Personalizado"),
-                            mandatoryRemindersEnabled = sObj.optBoolean("mandatoryRemindersEnabled", true),
-                            mandatoryDeadlineTime = sObj.optString("mandatoryDeadlineTime", "22:00"),
-                            mandatoryIntervalMinutes = sObj.optInt("mandatoryIntervalMinutes", 15),
-                            mandatoryAlarmSound = sObj.optBoolean("mandatoryAlarmSound", true)
-                        )
-                    } else null
+                        ?: return BackupValidationResult.Error("O campo 'settings' precisa ser um objeto válido.")
+                    UserSettingsExport(
+                        notificationsEnabled = sObj.optBoolean("notificationsEnabled", true),
+                        sleepGoalMinutes = sObj.optInt("sleepGoalMinutes", 480),
+                        bedtimeTarget = sObj.optString("bedtimeTarget", "23:00"),
+                        wakeTarget = sObj.optString("wakeTarget", "07:00"),
+                        themeMode = sObj.optString("themeMode", "light"),
+                        overdueRemindersEnabled = sObj.optBoolean("overdueRemindersEnabled", true),
+                        overdueIntervalMinutes = sObj.optInt("overdueIntervalMinutes", 15),
+                        overdueAlarmSound = sObj.optBoolean("overdueAlarmSound", true),
+                        typeSleepName = sObj.optString("typeSleepName", "Sono"),
+                        typeFocusName = sObj.optString("typeFocusName", "Foco"),
+                        typeExerciseName = sObj.optString("typeExerciseName", "Exercício"),
+                        typeWaterName = sObj.optString("typeWaterName", "Água"),
+                        typeCustomName = sObj.optString("typeCustomName", "Personalizado"),
+                        customHabitTypes = sObj.optString("customHabitTypes", "Personalizado"),
+                        mandatoryRemindersEnabled = sObj.optBoolean("mandatoryRemindersEnabled", true),
+                        mandatoryDeadlineTime = sObj.optString("mandatoryDeadlineTime", "22:00"),
+                        mandatoryIntervalMinutes = sObj.optInt("mandatoryIntervalMinutes", 15),
+                        mandatoryAlarmSound = sObj.optBoolean("mandatoryAlarmSound", true)
+                    )
                 } else null
 
                 val payload = BackupPayload(
