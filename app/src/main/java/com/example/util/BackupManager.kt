@@ -502,6 +502,45 @@ object BackupManager {
                 val parsedSettings: UserSettingsExport? = if (root.has("settings")) {
                     val sObj = root.optJSONObject("settings")
                         ?: return BackupValidationResult.Error("O campo 'settings' precisa ser um objeto válido.")
+                    // Missing fields remain backward-compatible, but present values must have the
+                    // expected JSON primitive type. JSONObject.opt* can silently coerce or default
+                    // malformed values, which could otherwise make corrupted settings look valid.
+                    val booleanKeys = listOf(
+                        "notificationsEnabled", "overdueRemindersEnabled", "overdueAlarmSound",
+                        "mandatoryRemindersEnabled", "mandatoryAlarmSound"
+                    )
+                    val integerKeys = listOf(
+                        "sleepGoalMinutes", "overdueIntervalMinutes", "mandatoryIntervalMinutes"
+                    )
+                    val stringKeys = listOf(
+                        "bedtimeTarget", "wakeTarget", "themeMode", "typeSleepName",
+                        "typeFocusName", "typeExerciseName", "typeWaterName", "typeCustomName",
+                        "customHabitTypes", "mandatoryDeadlineTime"
+                    )
+                    for (key in booleanKeys) {
+                        if (sObj.has(key) && sObj.opt(key) !is Boolean) {
+                            return BackupValidationResult.Error("A configuração '$key' precisa ser verdadeira ou falsa.")
+                        }
+                    }
+                    for (key in integerKeys) {
+                        val value = if (sObj.has(key)) sObj.opt(key) else null
+                        if (sObj.has(key) && (
+                                value !is Number ||
+                                    !value.toDouble().isFinite() ||
+                                    value.toDouble() % 1.0 != 0.0 ||
+                                    value.toDouble() < Int.MIN_VALUE.toDouble() ||
+                                    value.toDouble() > Int.MAX_VALUE.toDouble()
+                            )
+                        ) {
+                            return BackupValidationResult.Error("A configuração '$key' precisa ser um número inteiro válido.")
+                        }
+                    }
+                    for (key in stringKeys) {
+                        if (sObj.has(key) && sObj.opt(key) !is String) {
+                            return BackupValidationResult.Error("A configuração '$key' precisa ser um texto.")
+                        }
+                    }
+
                     val settings = UserSettingsExport(
                         notificationsEnabled = sObj.optBoolean("notificationsEnabled", true),
                         sleepGoalMinutes = sObj.optInt("sleepGoalMinutes", 480),

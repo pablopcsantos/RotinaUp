@@ -263,6 +263,22 @@ class BackupRestoreTest {
         assertTrue(
             BackupManager.validateBackupJson(invalidSettingsInterval) is BackupValidationResult.Error
         )
+
+        // Present values with the wrong JSON primitive type must not be silently coerced/defaulted.
+        val stringSettingsInterval = """{ "habits": [], "settings": { "mandatoryIntervalMinutes": "abc" } }"""
+        assertTrue(
+            BackupManager.validateBackupJson(stringSettingsInterval) is BackupValidationResult.Error
+        )
+
+        val stringSettingsBoolean = """{ "habits": [], "settings": { "notificationsEnabled": "false" } }"""
+        assertTrue(
+            BackupManager.validateBackupJson(stringSettingsBoolean) is BackupValidationResult.Error
+        )
+
+        val numericSettingsTime = """{ "habits": [], "settings": { "bedtimeTarget": 2300 } }"""
+        assertTrue(
+            BackupManager.validateBackupJson(numericSettingsTime) is BackupValidationResult.Error
+        )
     }
 
     @Test
