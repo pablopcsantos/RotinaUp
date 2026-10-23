@@ -230,6 +230,23 @@ class BackupRestoreTest {
         val randomObj = """{ "some_random_key": 123 }"""
         val randomResult = BackupManager.validateBackupJson(randomObj)
         assertTrue(randomResult is BackupValidationResult.Error)
+
+        // A malformed alarm section must not be silently discarded.
+        val malformedAlarmSection = """{ "habits": [], "alarmEvents": "not-an-array" }"""
+        assertTrue(
+            BackupManager.validateBackupJson(malformedAlarmSection) is BackupValidationResult.Error
+        )
+
+        val malformedAlarmItem = """{ "habits": [], "alarmEvents": [null] }"""
+        assertTrue(
+            BackupManager.validateBackupJson(malformedAlarmItem) is BackupValidationResult.Error
+        )
+
+        // Settings have a defined object shape; invalid settings must be reported.
+        val malformedSettings = """{ "habits": [], "settings": [] }"""
+        assertTrue(
+            BackupManager.validateBackupJson(malformedSettings) is BackupValidationResult.Error
+        )
     }
 
     @Test
