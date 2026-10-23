@@ -194,6 +194,69 @@ class BackupRestoreTest {
     }
 
     @Test
+    fun `failed replacement restore rolls back all database changes`() = runBlocking {
+        val habitDao = db.habitDao()
+        val sleepDao = db.sleepDao()
+        val settingsDao = db.settingsDao()
+
+        val localHabitId = habitDao.insertHabit(
+            Habit(id = 101, name = "Hábito local preservado", targetTime = "07:30")
+        )
+        habitDao.insertOrUpdateLog(
+            HabitLog(
+                id = 201,
+                habitId = localHabitId,
+                date = "2026-10-20",
+                status = "DONE",
+                note = "Histórico local que não pode desaparecer"
+            )
+        )
+        sleepDao.insertSleepLog(
+            SleepLog(id = 301, date = "2026-10-20", note = "Sono local preservado")
+        )
+        settingsDao.insertOrUpdateSettings(UserSettings(themeMode = "dark"))
+
+        // The payload has duplicate unique (habitId, date) keys. The insertion fails after
+        // replaceExisting has deleted the local rows, so the surrounding Room transaction
+        // must restore every deleted row instead of leaving the database partially empty.
+        val invalidPayload = BackupPayload(
+            habits = listOf(
+                Habit(id = 1, name = "Hábito importado", targetTime = "09:00")
+            ),
+            habitLogs = listOf(
+                HabitLog(id = 0, habitId = 1, date = "2026-10-21", status = "DONE"),
+                HabitLog(id = 0, habitId = 1, date = "2026-10-21", status = "PARTIAL")
+            )
+        )
+
+        val result = BackupManager.restoreBackup(
+            context = context,
+            db = db,
+            payload = invalidPayload,
+            replaceExisting = true
+        )
+
+        assertFalse("The invalid restore must report failure", result.success)
+
+        val habitsAfterFailure = habitDao.getAllHabits().first()
+        assertEquals(1, habitsAfterFailure.size)
+        assertEquals(localHabitId, habitsAfterFailure.single().id)
+        assertEquals("Hábito local preservado", habitsAfterFailure.single().name)
+
+        val logsAfterFailure = habitDao.getAllLogs().first()
+        assertEquals(1, logsAfterFailure.size)
+        assertEquals("Histórico local que não pode desaparecer", logsAfterFailure.single().note)
+
+        val sleepAfterFailure = sleepDao.getAllSleepLogs().first()
+        assertEquals(1, sleepAfterFailure.size)
+        assertEquals("Sono local preservado", sleepAfterFailure.single().note)
+
+        val settingsAfterFailure = settingsDao.getSettings().first()
+        assertNotNull(settingsAfterFailure)
+        assertEquals("dark", settingsAfterFailure!!.themeMode)
+    }
+
+    @Test
     fun `test validation rejects corrupted or invalid JSON`() {
         // Empty content
         val emptyResult = BackupManager.validateBackupJson("")
