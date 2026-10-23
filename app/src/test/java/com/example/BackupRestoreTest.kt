@@ -247,6 +247,22 @@ class BackupRestoreTest {
         assertTrue(
             BackupManager.validateBackupJson(malformedSettings) is BackupValidationResult.Error
         )
+
+        // Settings objects also need semantically valid values, not just the right JSON shape.
+        val invalidSettingsTime = """{ "habits": [], "settings": { "bedtimeTarget": "25:90" } }"""
+        assertTrue(
+            BackupManager.validateBackupJson(invalidSettingsTime) is BackupValidationResult.Error
+        )
+
+        val invalidSettingsTheme = """{ "habits": [], "settings": { "themeMode": "ultraviolet" } }"""
+        assertTrue(
+            BackupManager.validateBackupJson(invalidSettingsTheme) is BackupValidationResult.Error
+        )
+
+        val invalidSettingsInterval = """{ "habits": [], "settings": { "mandatoryIntervalMinutes": 0 } }"""
+        assertTrue(
+            BackupManager.validateBackupJson(invalidSettingsInterval) is BackupValidationResult.Error
+        )
     }
 
     @Test
