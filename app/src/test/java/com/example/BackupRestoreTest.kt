@@ -400,6 +400,56 @@ class BackupRestoreTest {
     }
 
     @Test
+    fun `backup validation rejects alarm events referencing missing habits`() {
+        val orphanedAlarmEvent = """
+            {
+              "schemaVersion": 1,
+              "habits": [
+                { "id": 7, "name": "Leitura", "type": "FOCUS", "targetTime": "08:00" }
+              ],
+              "alarmEvents": [
+                {
+                  "id": 4,
+                  "habitId": 99,
+                  "habitName": "Hábito ausente",
+                  "scheduledAt": 1792569600000,
+                  "dismissedAt": 1792569615000,
+                  "dismissAttempts": 1,
+                  "snoozed": false,
+                  "typedText": ""
+                }
+              ]
+            }
+        """.trimIndent()
+        assertTrue(
+            "An alarm event referencing a habit absent from the backup must be rejected",
+            BackupManager.validateBackupJson(orphanedAlarmEvent) is BackupValidationResult.Error
+        )
+
+        val alarmEventsWithoutHabits = """
+            {
+              "schemaVersion": 1,
+              "alarmEvents": [
+                {
+                  "id": 4,
+                  "habitId": 99,
+                  "habitName": "Hábito ausente",
+                  "scheduledAt": 1792569600000,
+                  "dismissedAt": 1792569615000,
+                  "dismissAttempts": 1,
+                  "snoozed": false,
+                  "typedText": ""
+                }
+              ]
+            }
+        """.trimIndent()
+        assertTrue(
+            "Alarm events cannot be restored without their referenced habits",
+            BackupManager.validateBackupJson(alarmEventsWithoutHabits) is BackupValidationResult.Error
+        )
+    }
+
+    @Test
     fun `backup validation rejects impossible calendar dates`() {
         val invalidHabitLogDate = """
             {
