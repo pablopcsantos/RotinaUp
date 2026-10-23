@@ -498,11 +498,11 @@ object BackupManager {
                     }
                 }
 
-                // Parse Settings
+                // Parse and validate settings values before allowing a restore.
                 val parsedSettings: UserSettingsExport? = if (root.has("settings")) {
                     val sObj = root.optJSONObject("settings")
                         ?: return BackupValidationResult.Error("O campo 'settings' precisa ser um objeto válido.")
-                    UserSettingsExport(
+                    val settings = UserSettingsExport(
                         notificationsEnabled = sObj.optBoolean("notificationsEnabled", true),
                         sleepGoalMinutes = sObj.optInt("sleepGoalMinutes", 480),
                         bedtimeTarget = sObj.optString("bedtimeTarget", "23:00"),
@@ -522,6 +522,22 @@ object BackupManager {
                         mandatoryIntervalMinutes = sObj.optInt("mandatoryIntervalMinutes", 15),
                         mandatoryAlarmSound = sObj.optBoolean("mandatoryAlarmSound", true)
                     )
+                    if (!TIME_REGEX.matches(settings.bedtimeTarget) ||
+                        !TIME_REGEX.matches(settings.wakeTarget) ||
+                        !TIME_REGEX.matches(settings.mandatoryDeadlineTime)
+                    ) {
+                        return BackupValidationResult.Error("As configurações de horário do backup são inválidas.")
+                    }
+                    if (settings.themeMode !in setOf("light", "dark", "system")) {
+                        return BackupValidationResult.Error("O tema do backup deve ser 'light', 'dark' ou 'system'.")
+                    }
+                    if (settings.sleepGoalMinutes !in 1..1440 ||
+                        settings.overdueIntervalMinutes !in 1..1440 ||
+                        settings.mandatoryIntervalMinutes !in 1..1440
+                    ) {
+                        return BackupValidationResult.Error("As durações e os intervalos das configurações devem estar entre 1 e 1440 minutos.")
+                    }
+                    settings
                 } else null
 
                 val payload = BackupPayload(
