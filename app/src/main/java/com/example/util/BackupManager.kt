@@ -483,6 +483,39 @@ object BackupManager {
                     for (i in 0 until aArr.length()) {
                         val item = aArr.optJSONObject(i)
                             ?: return BackupValidationResult.Error("Evento de alarme no índice ${i + 1} inválido.")
+                        // Validate explicit primitive types before opt* accessors can coerce or
+                        // replace malformed values with defaults.
+                        val alarmIntegerKeys = listOf("id", "habitId", "scheduledAt", "dismissedAt", "dismissAttempts")
+                        for (key in alarmIntegerKeys) {
+                            if (item.has(key)) {
+                                val value = item.opt(key)
+                                val number = value as? Number
+                                val isValidInteger = number != null &&
+                                    number.toDouble().isFinite() &&
+                                    number.toDouble() % 1.0 == 0.0 &&
+                                    number.toDouble() >= Long.MIN_VALUE.toDouble() &&
+                                    number.toDouble() <= Long.MAX_VALUE.toDouble() &&
+                                    (key != "dismissAttempts" ||
+                                        number.toDouble() in 1.0..Int.MAX_VALUE.toDouble())
+                                if (!isValidInteger) {
+                                    return BackupValidationResult.Error(
+                                        "O campo '$key' do evento de alarme no índice ${i + 1} precisa ser um número inteiro válido."
+                                    )
+                                }
+                            }
+                        }
+                        for (key in listOf("habitName", "typedText")) {
+                            if (item.has(key) && item.opt(key) !is String) {
+                                return BackupValidationResult.Error(
+                                    "O campo '$key' do evento de alarme no índice ${i + 1} precisa ser um texto."
+                                )
+                            }
+                        }
+                        if (item.has("snoozed") && item.opt("snoozed") !is Boolean) {
+                            return BackupValidationResult.Error(
+                                "O campo 'snoozed' do evento de alarme no índice ${i + 1} precisa ser verdadeiro ou falso."
+                            )
+                        }
                         parsedAlarms.add(
                             AlarmEvent(
                                 id = item.optLong("id", 0L),
