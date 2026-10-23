@@ -314,6 +314,51 @@ class BackupRestoreTest {
             BackupManager.validateBackupJson(malformedAlarmItem) is BackupValidationResult.Error
         )
 
+        val stringAlarmHabitId = """
+            {
+              "habits": [
+                { "id": 7, "name": "Leitura", "type": "FOCUS", "targetTime": "08:00" }
+              ],
+              "alarmEvents": [
+                { "habitId": "7", "habitName": "Leitura", "scheduledAt": 1792569600000, "dismissedAt": 1792569615000 }
+              ]
+            }
+        """.trimIndent()
+        assertTrue(
+            "Alarm habit IDs must be numeric rather than silently coerced from strings",
+            BackupManager.validateBackupJson(stringAlarmHabitId) is BackupValidationResult.Error
+        )
+
+        val stringAlarmSnoozed = """
+            {
+              "habits": [
+                { "id": 7, "name": "Leitura", "type": "FOCUS", "targetTime": "08:00" }
+              ],
+              "alarmEvents": [
+                { "habitId": 7, "habitName": "Leitura", "scheduledAt": 1792569600000, "dismissedAt": 1792569615000, "snoozed": "false" }
+              ]
+            }
+        """.trimIndent()
+        assertTrue(
+            "Alarm snoozed must be a JSON boolean",
+            BackupManager.validateBackupJson(stringAlarmSnoozed) is BackupValidationResult.Error
+        )
+
+        val invalidAlarmAttempts = """
+            {
+              "habits": [
+                { "id": 7, "name": "Leitura", "type": "FOCUS", "targetTime": "08:00" }
+              ],
+              "alarmEvents": [
+                { "habitId": 7, "habitName": "Leitura", "scheduledAt": 1792569600000, "dismissedAt": 1792569615000, "dismissAttempts": 0 }
+              ]
+            }
+        """.trimIndent()
+        assertTrue(
+            "Alarm dismissAttempts must be a positive integer",
+            BackupManager.validateBackupJson(invalidAlarmAttempts) is BackupValidationResult.Error
+        )
+
         // Settings have a defined object shape; invalid settings must be reported.
         val malformedSettings = """{ "habits": [], "settings": [] }"""
         assertTrue(
