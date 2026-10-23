@@ -516,6 +516,14 @@ object BackupManager {
                         "O registro de hábito da data '${orphanedLog.date}' referencia um hábito ausente no backup."
                     )
                 }
+                // Alarm history is also tied to a habit. Reject orphaned events instead of
+                // accepting a backup that would silently lose them during merge restoration.
+                val orphanedAlarm = parsedAlarms.firstOrNull { it.habitId !in knownHabitIds }
+                if (orphanedAlarm != null) {
+                    return BackupValidationResult.Error(
+                        "O evento de alarme referencia o hábito ${orphanedAlarm.habitId}, ausente no backup."
+                    )
+                }
 
                 // Parse and validate settings values before allowing a restore.
                 val parsedSettings: UserSettingsExport? = if (root.has("settings")) {
