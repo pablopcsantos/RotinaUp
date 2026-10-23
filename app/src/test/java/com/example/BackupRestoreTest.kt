@@ -354,6 +354,52 @@ class BackupRestoreTest {
     }
 
     @Test
+    fun `backup validation rejects duplicate habit IDs and orphaned habit logs`() {
+        val duplicateHabitIds = """
+            {
+              "schemaVersion": 1,
+              "habits": [
+                { "id": 7, "name": "Leitura", "type": "FOCUS", "targetTime": "08:00" },
+                { "id": 7, "name": "Caminhada", "type": "EXERCISE", "targetTime": "09:00" }
+              ]
+            }
+        """.trimIndent()
+        assertTrue(
+            "Duplicate habit IDs make imported log references ambiguous",
+            BackupManager.validateBackupJson(duplicateHabitIds) is BackupValidationResult.Error
+        )
+
+        val orphanedHabitLog = """
+            {
+              "schemaVersion": 1,
+              "habits": [
+                { "id": 7, "name": "Leitura", "type": "FOCUS", "targetTime": "08:00" }
+              ],
+              "habitLogs": [
+                { "id": 10, "habitId": 99, "date": "2026-10-21", "status": "DONE" }
+              ]
+            }
+        """.trimIndent()
+        assertTrue(
+            "A log referencing a habit absent from the backup must be rejected",
+            BackupManager.validateBackupJson(orphanedHabitLog) is BackupValidationResult.Error
+        )
+
+        val logsWithoutHabits = """
+            {
+              "schemaVersion": 1,
+              "habitLogs": [
+                { "id": 10, "habitId": 99, "date": "2026-10-21", "status": "DONE" }
+              ]
+            }
+        """.trimIndent()
+        assertTrue(
+            "Habit logs cannot be restored without their referenced habits",
+            BackupManager.validateBackupJson(logsWithoutHabits) is BackupValidationResult.Error
+        )
+    }
+
+    @Test
     fun `backup validation rejects impossible calendar dates`() {
         val invalidHabitLogDate = """
             {
