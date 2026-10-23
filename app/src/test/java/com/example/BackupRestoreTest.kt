@@ -430,6 +430,22 @@ class BackupRestoreTest {
             BackupManager.validateBackupJson(orphanedHabitLog) is BackupValidationResult.Error
         )
 
+        val invalidHabitLogStatus = """
+            {
+              "schemaVersion": 1,
+              "habits": [
+                { "id": 7, "name": "Leitura", "type": "FOCUS", "targetTime": "08:00" }
+              ],
+              "habitLogs": [
+                { "id": 10, "habitId": 7, "date": "2026-10-21", "status": "TYPO" }
+              ]
+            }
+        """.trimIndent()
+        assertTrue(
+            "Unknown habit-log statuses must be rejected instead of being restored as DONE",
+            BackupManager.validateBackupJson(invalidHabitLogStatus) is BackupValidationResult.Error
+        )
+
         val logsWithoutHabits = """
             {
               "schemaVersion": 1,
