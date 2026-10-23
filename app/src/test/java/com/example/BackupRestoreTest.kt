@@ -269,6 +269,32 @@ class BackupRestoreTest {
             "Impossible sleep-log dates must be rejected",
             BackupManager.validateBackupJson(invalidSleepDate) is BackupValidationResult.Error
         )
+
+        val invalidNapDate = """
+            {
+              "schemaVersion": 1,
+              "napLogs": [
+                { "id": 1, "date": "2026-04-31", "hasNap": true, "napTime": "13:30", "napMinutes": 20 }
+              ]
+            }
+        """.trimIndent()
+        assertTrue(
+            "Impossible nap-log dates must be rejected",
+            BackupManager.validateBackupJson(invalidNapDate) is BackupValidationResult.Error
+        )
+
+        val invalidReviewDate = """
+            {
+              "schemaVersion": 1,
+              "dailyReviews": [
+                { "id": 1, "date": "2026-02-29", "mood": 3, "energy": 3, "focus": 3 }
+              ]
+            }
+        """.trimIndent()
+        assertTrue(
+            "Impossible daily-review dates must be rejected",
+            BackupManager.validateBackupJson(invalidReviewDate) is BackupValidationResult.Error
+        )
     }
 
     @Test
