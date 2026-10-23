@@ -216,16 +216,25 @@ class BackupRestoreTest {
         )
         settingsDao.insertOrUpdateSettings(UserSettings(themeMode = "dark"))
 
-        // The payload has duplicate unique (habitId, date) keys. The insertion fails after
-        // replaceExisting has deleted the local rows, so the surrounding Room transaction
-        // must restore every deleted row instead of leaving the database partially empty.
+        // Force a real SQLite failure after replacement has deleted local rows and
+        // inserted the imported habit. This exercises transaction rollback rather than
+        // relying on duplicate rows, which Room may replace due to its conflict strategy.
+        db.openHelper.writableDatabase.execSQL(
+            """
+            CREATE TRIGGER fail_backup_sleep_insert
+            BEFORE INSERT ON sleep_logs
+            BEGIN
+                SELECT RAISE(ABORT, 'forced backup restore failure');
+            END
+            """.trimIndent()
+        )
+
         val invalidPayload = BackupPayload(
             habits = listOf(
                 Habit(id = 1, name = "Hábito importado", targetTime = "09:00")
             ),
-            habitLogs = listOf(
-                HabitLog(id = 0, habitId = 1, date = "2026-10-21", status = "DONE"),
-                HabitLog(id = 0, habitId = 1, date = "2026-10-21", status = "PARTIAL")
+            sleepLogs = listOf(
+                SleepLog(id = 0, date = "2026-10-21", note = "Este registro não deve ser inserido")
             )
         )
 
