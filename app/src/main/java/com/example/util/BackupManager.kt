@@ -498,6 +498,25 @@ object BackupManager {
                     }
                 }
 
+                // Habit history must refer to exactly one imported habit. Without this
+                // check, replace mode could restore orphaned logs, while merge mode would
+                // silently skip them because no local ID mapping exists.
+                val importedHabitIds = parsedHabits.map { it.id }
+                if (importedHabitIds.any { it <= 0L } ||
+                    importedHabitIds.toSet().size != importedHabitIds.size
+                ) {
+                    return BackupValidationResult.Error(
+                        "Os hábitos do backup precisam ter identificadores positivos e únicos."
+                    )
+                }
+                val knownHabitIds = importedHabitIds.toSet()
+                val orphanedLog = parsedLogs.firstOrNull { it.habitId !in knownHabitIds }
+                if (orphanedLog != null) {
+                    return BackupValidationResult.Error(
+                        "O registro de hábito da data '${orphanedLog.date}' referencia um hábito ausente no backup."
+                    )
+                }
+
                 // Parse and validate settings values before allowing a restore.
                 val parsedSettings: UserSettingsExport? = if (root.has("settings")) {
                     val sObj = root.optJSONObject("settings")
