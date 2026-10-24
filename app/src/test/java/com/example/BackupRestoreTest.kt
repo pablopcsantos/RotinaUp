@@ -399,6 +399,40 @@ class BackupRestoreTest {
     }
 
     @Test
+    fun `backup validation rejects duplicate logical history records`() {
+        val duplicateHabitLogDate = """
+            {
+              "schemaVersion": 1,
+              "habits": [
+                { "id": 7, "name": "Leitura", "type": "FOCUS", "targetTime": "08:00" }
+              ],
+              "habitLogs": [
+                { "id": 10, "habitId": 7, "date": "2026-10-21", "status": "DONE" },
+                { "id": 11, "habitId": 7, "date": "2026-10-21", "status": "PARTIAL" }
+              ]
+            }
+        """.trimIndent()
+        assertTrue(
+            "A habit must not have two history records for the same date",
+            BackupManager.validateBackupJson(duplicateHabitLogDate) is BackupValidationResult.Error
+        )
+
+        val duplicateSleepDate = """
+            {
+              "schemaVersion": 1,
+              "sleepLogs": [
+                { "id": 1, "date": "2026-10-21", "bedtimeStr": "23:00", "wakeTimeStr": "07:00" },
+                { "id": 2, "date": "2026-10-21", "bedtimeStr": "22:30", "wakeTimeStr": "06:30" }
+              ]
+            }
+        """.trimIndent()
+        assertTrue(
+            "A backup must not contain multiple sleep logs for the same date",
+            BackupManager.validateBackupJson(duplicateSleepDate) is BackupValidationResult.Error
+        )
+    }
+
+    @Test
     fun `backup validation rejects duplicate habit IDs and orphaned habit logs`() {
         val duplicateHabitIds = """
             {

@@ -562,6 +562,30 @@ object BackupManager {
                     )
                 }
 
+                // Reject duplicate logical keys before restore. Room enforces one entry per
+                // habit/date and one sleep, nap, or review entry per date; accepting duplicates
+                // here would defer a clear validation error until database insertion.
+                if (parsedLogs.map { "${it.habitId}|${it.date}" }.toSet().size != parsedLogs.size) {
+                    return BackupValidationResult.Error(
+                        "O backup contém mais de um registro para o mesmo hábito e data."
+                    )
+                }
+                if (parsedSleep.map { it.date }.toSet().size != parsedSleep.size) {
+                    return BackupValidationResult.Error(
+                        "O backup contém mais de um registro de sono para a mesma data."
+                    )
+                }
+                if (parsedNaps.map { it.date }.toSet().size != parsedNaps.size) {
+                    return BackupValidationResult.Error(
+                        "O backup contém mais de um registro de cochilo para a mesma data."
+                    )
+                }
+                if (parsedReviews.map { it.date }.toSet().size != parsedReviews.size) {
+                    return BackupValidationResult.Error(
+                        "O backup contém mais de uma revisão diária para a mesma data."
+                    )
+                }
+
                 // Parse and validate settings values before allowing a restore.
                 val parsedSettings: UserSettingsExport? = if (root.has("settings")) {
                     val sObj = root.optJSONObject("settings")
