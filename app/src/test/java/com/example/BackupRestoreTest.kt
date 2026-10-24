@@ -399,6 +399,48 @@ class BackupRestoreTest {
     }
 
     @Test
+    fun `backup validation rejects out of range sleep and daily review ratings`() {
+        val invalidSleepQuality = """
+            {
+              "schemaVersion": 1,
+              "sleepLogs": [
+                { "date": "2026-10-21", "quality": 9 }
+              ]
+            }
+        """.trimIndent()
+        assertTrue(
+            "Sleep quality outside 1..5 must be rejected instead of clamped",
+            BackupManager.validateBackupJson(invalidSleepQuality) is BackupValidationResult.Error
+        )
+
+        val invalidReviewRating = """
+            {
+              "schemaVersion": 1,
+              "dailyReviews": [
+                { "date": "2026-10-21", "mood": 0 }
+              ]
+            }
+        """.trimIndent()
+        assertTrue(
+            "Daily review ratings outside 1..5 must be rejected",
+            BackupManager.validateBackupJson(invalidReviewRating) is BackupValidationResult.Error
+        )
+
+        val stringRating = """
+            {
+              "schemaVersion": 1,
+              "dailyReviews": [
+                { "date": "2026-10-21", "focus": "4" }
+              ]
+            }
+        """.trimIndent()
+        assertTrue(
+            "A rating encoded as text must be rejected rather than coerced",
+            BackupManager.validateBackupJson(stringRating) is BackupValidationResult.Error
+        )
+    }
+
+    @Test
     fun `backup validation rejects duplicate logical history records`() {
         val duplicateHabitLogDate = """
             {

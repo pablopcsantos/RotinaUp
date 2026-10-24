@@ -409,6 +409,11 @@ object BackupManager {
                         if (!isValidDate(date)) {
                             return BackupValidationResult.Error("Registro de sono no índice ${i + 1} possui data inválida: '$date'.")
                         }
+                        if (item.has("quality") && !isJsonIntegerInRange(item.opt("quality"), 1..5)) {
+                            return BackupValidationResult.Error(
+                                "A qualidade do sono no registro ${i + 1} deve ser um número inteiro entre 1 e 5."
+                            )
+                        }
                         parsedSleep.add(
                             SleepLog(
                                 id = item.optLong("id", 0L),
@@ -463,6 +468,13 @@ object BackupManager {
                         val date = item.optString("date")
                         if (!isValidDate(date)) {
                             return BackupValidationResult.Error("Diário noturno no índice ${i + 1} possui data inválida.")
+                        }
+                        for (key in listOf("mood", "energy", "focus")) {
+                            if (item.has(key) && !isJsonIntegerInRange(item.opt(key), 1..5)) {
+                                return BackupValidationResult.Error(
+                                    "O campo '$key' da revisão diária no índice ${i + 1} deve ser um número inteiro entre 1 e 5."
+                                )
+                            }
                         }
                         parsedReviews.add(
                             DailyReview(
@@ -703,6 +715,15 @@ object BackupManager {
         } catch (e: Exception) {
             return BackupValidationResult.Error("Erro ao processar JSON: ${e.localizedMessage ?: "formato corrompido"}")
         }
+    }
+
+    private fun isJsonIntegerInRange(value: Any?, range: IntRange): Boolean {
+        val number = value as? Number ?: return false
+        val doubleValue = number.toDouble()
+        return doubleValue.isFinite() &&
+            doubleValue % 1.0 == 0.0 &&
+            doubleValue >= range.first.toDouble() &&
+            doubleValue <= range.last.toDouble()
     }
 
     private fun parseHabit(obj: JSONObject, index: Int): Habit? {
