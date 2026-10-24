@@ -378,13 +378,17 @@ object BackupManager {
                             return BackupValidationResult.Error("Registro de hábito no índice ${i + 1} possui data ou habitId inválido.")
                         }
                         val status = item.optString("status", "DONE").uppercase()
-                        val validStatus = if (status in listOf("DONE", "PARTIAL", "SKIPPED")) status else "DONE"
+                        if (status !in listOf("DONE", "PARTIAL", "SKIPPED")) {
+                            return BackupValidationResult.Error(
+                                "Registro de hábito no índice ${i + 1} possui status inválido: '$status'."
+                            )
+                        }
                         parsedLogs.add(
                             HabitLog(
                                 id = item.optLong("id", 0L),
                                 habitId = habitId,
                                 date = date,
-                                status = validStatus,
+                                status = status,
                                 reason = if (item.isNull("reason")) null else item.optString("reason"),
                                 note = if (item.isNull("note")) null else item.optString("note"),
                                 timestamp = item.optLong("timestamp", System.currentTimeMillis())
